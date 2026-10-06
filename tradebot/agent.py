@@ -123,6 +123,14 @@ def run_once(broker=None, specs=None, bars_fn=fresh_bars, today: date | None = N
         except Exception as e:
             note(trend_agent.NAME, "-", "error", f"{type(e).__name__}: {e}")
 
+    if cfg.get("bigbet", {}).get("enabled"):
+        from . import bigbet_agent
+
+        try:
+            bigbet_agent.run(broker, con, cfg, risk, note, today=today)
+        except Exception as e:
+            note(bigbet_agent.NAME, "-", "error", f"{type(e).__name__}: {e}")
+
     if not specs:
         note("-", "-", "idle", "No approved strategies yet. Backtest and approve one first.")
         return log

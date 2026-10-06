@@ -20,6 +20,13 @@ def _coid(tag: str) -> str:
     return f"{_slug(tag)}-{uuid.uuid4().hex[:12]}"
 
 
+def _order_symbol(p) -> str:
+    """Alpaca lists crypto positions as BTCUSD but trades them as BTC/USD; journal lots use BTC/USD."""
+    if "crypto" in str(p.asset_class).lower() and "/" not in p.symbol:
+        return f"{p.symbol[:-3]}/{p.symbol[-3:]}"
+    return p.symbol
+
+
 @dataclass
 class Account:
     equity: float
@@ -41,7 +48,7 @@ class AlpacaPaperBroker:
         return Account(float(a.equity), float(a.cash), float(a.last_equity))
 
     def positions(self) -> dict[str, float]:
-        return {p.symbol: float(p.qty) for p in self.client.get_all_positions()}
+        return {_order_symbol(p): float(p.qty) for p in self.client.get_all_positions()}
 
     def market_open(self) -> bool:
         return bool(self.client.get_clock().is_open)
@@ -52,7 +59,8 @@ class AlpacaPaperBroker:
 
         o = self.client.submit_order(MarketOrderRequest(
             symbol=symbol, qty=qty, side=OrderSide.BUY if side == "buy" else OrderSide.SELL,
-            time_in_force=TimeInForce.DAY, client_order_id=_coid(tag),
+            time_in_force=TimeInForce.GTC if "/" in symbol else TimeInForce.DAY,  # crypto needs GTC
+            client_order_id=_coid(tag),
         ))
         return str(o.id), str(o.status)
 

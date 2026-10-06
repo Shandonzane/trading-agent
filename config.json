@@ -40,5 +40,16 @@
   "trend": {
     "enabled": true,
     "capital_pct": 0.2
+  },
+  "bigbet": {
+    "enabled": true,
+    "weights": {
+      "BTC/USD": 0.02,
+      "ETH/USD": 0.01,
+      "NVDA": 0.01,
+      "AMD": 0.01
+    },
+    "max_pct": 0.1,
+    "_note": "Weights are fractions of account_size. Bought once, held, no stops, no top-ups; trimmed to weights each January and whenever the sleeve passes max_pct."
   }
 }
