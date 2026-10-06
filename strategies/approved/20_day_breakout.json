@@ -36,7 +36,7 @@
       }
     ]
   },
-  "stop_loss_pct": 0.07,
+  "stop_loss_pct": 0.12,
   "position_size_pct": 0.1,
   "complete": true,
   "missing": [],

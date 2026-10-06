@@ -95,6 +95,9 @@ def test_agent_sim_run(tmp_path, monkeypatch):
     from tradebot import bigbet_agent
 
     monkeypatch.setattr(bigbet_agent, "run", lambda *a, **k: None)
+    from tradebot import hedge_agent
+
+    monkeypatch.setattr(hedge_agent, "run", lambda *a, **k: None)
     df = synthetic_bars(400)
     spec = StrategySpec(name="always", symbols=["SPY"], entry=always(), position_size_pct=0.5)
     broker = SimBroker(100_000, path=tmp_path / "sim.json")

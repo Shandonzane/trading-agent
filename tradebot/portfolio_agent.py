@@ -111,6 +111,13 @@ def run(broker, con, cfg: dict, risk, note, prices_fn=None, today: date | None =
         reasons.append(f"rule flip {state['picks']} -> {picks}")
     if "flags_on" in state and set(state["flags_on"]) != on:
         reasons.append(f"flags changed {sorted(state['flags_on'])} -> {sorted(on)}")
+    from . import stops
+
+    out = {t for t in weights if stops.is_out(name, t)}
+    back = {t for t in out if t in px.columns and not stops.waiting(name, t, px[t], note)}
+    if back:
+        reasons.append(f"re-entry after stop: {', '.join(sorted(back))}")
+    out -= back
     for f in flags:
         if f.get("on") is None and "status" in f:
             note(name, "-", "flag_unchecked", f"{f['id']}: {f['status']}")
@@ -141,6 +148,7 @@ def run(broker, con, cfg: dict, risk, note, prices_fn=None, today: date | None =
                 (buys if diff > 0 else sells).append((t, min(qty, have) if diff < 0 else qty, price))
 
     for t, qty, price in sells:
+        broker.cancel_stops(t, name)  # its stop holds the shares; the next run re-places it
         oid, status = broker.submit(t, qty, "sell", price, tag=name)
         journal.order(con, name, t, "sell", qty, price, broker.name, status, oid)
         lot = held[t]
@@ -155,6 +163,8 @@ def run(broker, con, cfg: dict, risk, note, prices_fn=None, today: date | None =
         why = None
         if t not in allowed:
             why = f"{t} not in the portfolio's ETF list"
+        elif t in out:
+            why = "stopped out; waiting for the re-entry rule"
         elif (have + qty) * price > cap * capital * 1.001:
             why = f"over max_single_etf {cap:.0%} of the portfolio"
         elif committed + qty * price > cfg["risk"]["max_total_exposure_pct"] * acct.equity:

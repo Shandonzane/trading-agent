@@ -106,6 +106,12 @@ def run_once(broker=None, specs=None, bars_fn=fresh_bars, today: date | None = N
         log.append({"strategy": strategy, "symbol": symbol, "action": action, "reason": reason, **detail})
 
     reconcile(con, broker, specs, note)
+    from . import stops
+
+    try:
+        stops.record_stop_outs(broker, cfg, note)
+    except Exception as e:
+        note("stops", "-", "error", f"{type(e).__name__}: {e}")
 
     if cfg.get("portfolio", {}).get("enabled"):
         from . import portfolio_agent
@@ -130,6 +136,20 @@ def run_once(broker=None, specs=None, bars_fn=fresh_bars, today: date | None = N
             bigbet_agent.run(broker, con, cfg, risk, note, today=today)
         except Exception as e:
             note(bigbet_agent.NAME, "-", "error", f"{type(e).__name__}: {e}")
+
+    if cfg.get("hedge", {}).get("enabled"):
+        from . import hedge_agent
+
+        try:
+            hedge_agent.run(broker, con, cfg, risk, note, today=today)
+        except Exception as e:
+            note(hedge_agent.NAME, "-", "error", f"{type(e).__name__}: {e}")
+
+    try:  # 12% trailing stops at the broker for the slices' stock holdings
+        stops.protect(broker, con, cfg, note, lambda s: bars_fn(s, today - timedelta(days=420), today + timedelta(days=1)),
+                      broker.last_session())
+    except Exception as e:
+        note("stops", "-", "error", f"{type(e).__name__}: {e}")
 
     if not specs:
         note("-", "-", "idle", "No approved strategies yet. Backtest and approve one first.")

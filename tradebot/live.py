@@ -55,8 +55,8 @@ class LiveMonitor:
 
     # ---------- setup ----------
     def _watchlist(self) -> list[str]:
-        # stock stream only: crypto positions (BTCUSD) are priced by the 30s snapshot instead
-        syms = {p.symbol for p in self.client.get_all_positions() if "crypto" not in str(p.asset_class).lower()}
+        # stock stream only: crypto and option positions are priced by the 30s snapshot instead
+        syms = {p.symbol for p in self.client.get_all_positions() if "equity" in str(p.asset_class).lower()}
         approved = ROOT / "strategies" / "approved"
         for f in approved.glob("*.json") if approved.exists() else []:
             syms |= set(json.loads(f.read_text()).get("symbols", []))
