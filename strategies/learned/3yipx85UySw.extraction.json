@@ -1,0 +1,24 @@
+{
+  "summary": "The video teaches an intraday 'first 30-minute candle' opening-range strategy on what appears to be SPY (price around 671), traded with 0DTE options. If the first 30-minute candle closes red you buy puts; if green, calls. You then mark the candle's high and low as the day's range and add to the position on a break or close beyond that range, taking profits around a 100% option gain or at a gap fill.",
+  "has_testable_strategy": false,
+  "why_not_testable": [
+    "The signal depends on the color, high and low of the first 30-minute candle after the open. That needs intraday bars. The backtester only supports daily bars, and a daily candle cannot reproduce the first-30-minute candle or its range.",
+    "Half the signals are bearish (red candle means buy puts, which is a short bias on the underlying). The backtester is long only.",
+    "Entries 2 to 4 (adding on a break of the 30-minute range, on a 30-minute close below it, or on a later-day rejection) are intraday events. They also rely on discretionary momentum reads ('you could tell the momentum was pushing back').",
+    "Exits are not mechanical. They include roughly a 100% gain on the 0DTE option, a gap-fill target, or closing on a 'bounce and support and a lot of momentum.' None of these map to a fixed percentage move in the underlying.",
+    "No stop loss is given. The speaker defers the 'failed day' handling to a future video.",
+    "Any daily-bar version (for example, using yesterday's candle color) would be an invented proxy, not what the speaker trades."
+  ],
+  "strategies": [],
+  "non_mechanical_ideas": [
+    "Do nothing during the first 30 minutes after the open. Don't even watch, to avoid bias from volatile swings and heavy volume.",
+    "Direction rule: first 30-minute candle closes red means puts, green means calls. Start with a small position so you can add on confirmation and avoid getting trapped by a fake-out.",
+    "Draw the high and low of the first 30-minute candle (wick to wick) as the day's '30 minute range.' For puts, keep holding while price closes or pushes below the range low. Consider closing, or even adding calls, if price bounces off support with strong momentum.",
+    "Second entry: add when price moves back below the range low after a bounce. Third entry: add when a 30-minute candle closes below the range, which confirms that support broke.",
+    "Possible fourth entry later in the day: price retests the broken range line, gets rejected, and pushes down again.",
+    "Profit targets: an unfilled overnight gap is a candidate target. About 100% return on the 0DTE options within roughly an hour is a good point to close and be done for the day.",
+    "The general premise is that once the market finds a direction for the day, it tends to continue. Reading momentum and trend 'takes a little bit more experience.'",
+    "Reversal/failed-day management is not covered; the speaker says it will be shown in another video."
+  ],
+  "options_notes": "Uses 0DTE (same-day expiration) options on what appears to be SPY (strike ~672 with price ~671). Red first 30-minute candle means buy puts; green means buy calls. Entry 1 is a small position in a slightly in-the-money put (672 put with price at 671). Entry 2, on a break below the range low, can use a cheaper, lower-strike out-of-the-money put. Entry 3, on a 30-minute close below the range, uses an in-the-money put because it is a worse entry. The position is scaled in across 3 to 4 entries. Profit-taking is around +100% on the options or at a gap fill. No stop or maximum loss is specified."
+}

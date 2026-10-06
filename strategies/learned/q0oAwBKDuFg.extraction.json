@@ -1,0 +1,113 @@
+{
+  "summary": "The video teaches a 'first candle' opening-range breakout-and-retest strategy on the 5-minute chart. You mark the high and low of the first 5-minute candle after the 9:30 ET open, then wait for a 5-minute close outside that range. Next you wait for a retest candle that trades back into the broken level but closes outside the range, then enter in the breakout direction (long or short), with the stop just beyond the range midpoint and a fixed 2:1 target. The speaker reports a one-month Nasdaq futures backtest (one contract) of 20 trades, a 70% win rate and about $10,000 net, then pitches a paid mentorship.",
+  "has_testable_strategy": true,
+  "why_not_testable": [
+    "The real strategy runs on 5-minute intraday bars and depends on the first 5-minute candle after 9:30 ET. The daily-bar backtester cannot represent it, so only a loose daily proxy is given below.",
+    "The strategy trades both directions, and the video's main example is a short. The backtester is long-only, so the short side is dropped.",
+    "The stop sits at the midpoint of the first-candle range and the target is 2x the actual risk. Both are price-structure distances, not fixed percentages, so fixed percentages approximate them."
+  ],
+  "strategies": [
+    {
+      "name": "First 5-Minute Candle Breakout + Retest (daily long-only proxy)",
+      "description": "A coarse daily-bar approximation of the long side of the video's opening-range breakout and retest. It uses the prior bar's high as the 'range high'. Entry needs a bar that dips back to or below that level (the retest) but closes above it (holds outside the range). It keeps the 2:1 reward-to-risk with fixed percentage stop and target and exits within one day to mimic the intraday nature. This is NOT the video's actual strategy, which needs 5-minute bars, the 9:30 ET first candle, a sequenced break-then-retest, and shorts.",
+      "source_url": "https://www.youtube.com/watch?v=q0oAwBKDuFg",
+      "symbols": [
+        "QQQ"
+      ],
+      "direction": "long",
+      "entry": {
+        "mode": "all",
+        "conditions": [
+          {
+            "left": {
+              "ind": "close"
+            },
+            "op": ">",
+            "right": {
+              "ind": "highest",
+              "period": 1
+            }
+          },
+          {
+            "left": {
+              "ind": "low"
+            },
+            "op": "<=",
+            "right": {
+              "ind": "highest",
+              "period": 1
+            }
+          }
+        ]
+      },
+      "stop_loss_pct": 0.01,
+      "take_profit_pct": 0.02,
+      "max_hold_days": 1,
+      "position_size_pct": 0.1,
+      "complete": false,
+      "missing": [
+        "Uses 5-minute intraday bars; the backtester supports daily bars only.",
+        "The range is the high/low of the first 5-minute candle after 9:30 a.m. ET. Daily bars have no equivalent, so the prior day's high is a substitute.",
+        "The break and the retest are separate sequenced events: first a candle closes outside the range, then a later candle trades back into the level without closing inside the range. The rule language cannot express sequencing, so both are collapsed into one bar.",
+        "Short trades on downside breaks of the first-candle low are part of the strategy (the main example is a short), but the backtester is long-only.",
+        "The stop is just beyond the midpoint of the first-candle range (structure-based), not a fixed percentage.",
+        "The take profit is 2x the actual entry-to-stop distance, not a fixed percentage.",
+        "No rule is given for exiting at end of day, for how many trades per day, or for a cutoff time if no setup appears."
+      ],
+      "assumptions": [
+        "The prior day's high (highest, period 1) stands in for the first 5-minute candle high.",
+        "A single bar with low <= that level and close > that level stands in for 'breakout close + retest that closes outside the range'.",
+        "A 1% stop and 2% target keep the video's 2:1 reward-to-risk; the actual distances depend on the first-candle range.",
+        "max_hold_days=1 approximates an intraday trade; the speaker never states an end-of-day exit.",
+        "QQQ is used as a daily proxy for the Nasdaq futures (one NQ contract) the speaker backtested.",
+        "Position size of 10% is a default; the speaker traded one futures contract."
+      ],
+      "evidence": [
+        {
+          "rule": "timeframe / range definition",
+          "quote": "you're going to get to your desk right at 9:30 a.m. Eastern Standard Time... we're going to stay on the 5-minute chart... after you've waited for this first 5-minute candle to close, we want to mark out the high and low."
+        },
+        {
+          "rule": "entry (breakout close)",
+          "quote": "The first is to wait for a 5-minute candle closure through one of our levels."
+        },
+        {
+          "rule": "entry (retest)",
+          "quote": "We need to wait for a retest, that way we avoid fakeouts. And to get a valid retest, we need a candle to trade back into the level, but not close inside of it."
+        },
+        {
+          "rule": "entry (timing)",
+          "quote": "And after we get our retest candle, we're good to enter the trade."
+        },
+        {
+          "rule": "direction (shorts)",
+          "quote": "you can go up here and click the sell button on TradingView since we broke through the low."
+        },
+        {
+          "rule": "stop_loss",
+          "quote": "our stop loss is going to go right at the middle of the range that's created between the first 5-minute candle high and the low... we're going to drag it right up here above that midpoint."
+        },
+        {
+          "rule": "take_profit",
+          "quote": "to place our target, we're going to go for a fixed 2:1 return. This means that on our winning trades, we'll make twice as much money as we lose when we're wrong."
+        },
+        {
+          "rule": "symbols",
+          "quote": "I did this backtest with one contract on Nasdaq over a little longer than a month period... we had total of 20 trades, 70% of those trades were winners, and it netted $10,000"
+        },
+        {
+          "rule": "markets",
+          "quote": "This strategy and this same time works in any market, whether it's futures, stocks, crypto, or forex."
+        }
+      ]
+    }
+  ],
+  "non_mechanical_ideas": [
+    "Avoid FOMO: don't enter on the first breakout close without a retest, because the next candle often reverses.",
+    "Repeated failed attempts to close outside the range signal chop or consolidation; stay patient and wait for a clean close plus retest.",
+    "Once the trade is set, don't interfere; let the stop and target play out and trust the setup.",
+    "Boring, consistent repetition of one setup is presented as the key to profitability.",
+    "Low drawdown and a smooth equity curve are pitched as good for psychology and prop-firm challenges (part of an affiliate and mentorship sales pitch).",
+    "The 20-trade, one-month backtest is a very small sample and is reported by the seller of a mentorship program."
+  ]
+}

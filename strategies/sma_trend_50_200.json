@@ -1,0 +1,9 @@
+{
+  "name": "Golden cross trend (50/200 SMA)",
+  "description": "Classic trend follower: buy when the 50-day average crosses above the 200-day, sell on the reverse cross.",
+  "symbols": ["SPY", "QQQ"],
+  "entry": {"mode": "all", "conditions": [{"left": {"ind": "sma", "period": 50}, "op": "crosses_above", "right": {"ind": "sma", "period": 200}}]},
+  "exit": {"mode": "any", "conditions": [{"left": {"ind": "sma", "period": 50}, "op": "crosses_below", "right": {"ind": "sma", "period": 200}}]},
+  "stop_loss_pct": 0.10,
+  "position_size_pct": 0.10
+}

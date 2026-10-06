@@ -1,0 +1,12 @@
+pandas>=2.0
+numpy>=1.26
+alpaca-py>=0.30
+yfinance>=0.2.40
+youtube-transcript-api>=1.0
+anthropic>=1.0
+pydantic>=2.0
+streamlit>=1.35
+plotly>=5.20
+python-dotenv>=1.0
+pytest>=8.0
+yt-dlp>=2025.1

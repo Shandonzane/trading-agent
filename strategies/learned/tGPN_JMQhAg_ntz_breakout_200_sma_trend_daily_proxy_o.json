@@ -1,0 +1,113 @@
+{
+  "name": "NTZ Breakout + 200 SMA Trend (daily proxy of ORB/NTZ day-trade, long side)",
+  "description": "Rough daily-bar approximation of the speaker's intraday system. Go long only when price is above the 200 SMA (the 'truth filter') and has broken out above yesterday's high (the top of the 'No Trading Zone'). Hold for at most one day, because the original is an intraday trade. This does NOT capture the 15-minute opening range, the retest-then-next-candle entry, pre-market levels or hand-drawn profit levels.",
+  "source_url": "https://www.youtube.com/watch?v=tGPN_JMQhAg",
+  "symbols": [
+    "SPY"
+  ],
+  "direction": "long",
+  "entry": {
+    "mode": "all",
+    "conditions": [
+      {
+        "left": {
+          "ind": "close"
+        },
+        "op": ">",
+        "right": {
+          "ind": "sma",
+          "period": 200
+        }
+      },
+      {
+        "left": {
+          "ind": "close"
+        },
+        "op": ">",
+        "right": {
+          "ind": "highest",
+          "period": 1
+        }
+      }
+    ]
+  },
+  "exit": {
+    "mode": "any",
+    "conditions": [
+      {
+        "left": {
+          "ind": "close"
+        },
+        "op": "crosses_below",
+        "right": {
+          "ind": "sma",
+          "period": 200
+        }
+      }
+    ]
+  },
+  "stop_loss_pct": 0.01,
+  "max_hold_days": 1,
+  "position_size_pct": 0.1,
+  "complete": false,
+  "missing": [
+    "Uses intraday bars: 2-min (first 30 min), 5-min (10:00-11:00), 10-min (after 11:00). The 200 SMA is computed on those charts, not on daily bars.",
+    "Entry trigger is a break of the first 15-minute opening range (9:30-9:45), then a retest, with entry on the candle AFTER the retest. This is not expressible on daily bars.",
+    "The NTZ uses the pre-market high/low (extended hours) as well as yesterday's high/low. Pre-market data is not available in daily bars.",
+    "Stop loss is 'on the other side of the ORB' or the other side of a Fibonacci level. No fixed percentage is given.",
+    "Profit targets are hand-drawn hourly levels, with partial scale-outs at each level and runners held on trend days. No fixed percentage is given.",
+    "Short side: puts are bought when price is below the 200 SMA. Shorting is not supported by the long-only backtester.",
+    "Trading window is restricted to roughly the first 90 minutes of the session.",
+    "Bell-curve position sizing: small first trade, size up when in rhythm, size down or stop when red."
+  ],
+  "assumptions": [
+    "Used the 200-day SMA as a stand-in for the 200 SMA on intraday charts.",
+    "Used close above the previous day's high (highest, period 1) as a proxy for 'fully breaking out of the NTZ' to the upside. Pre-market high is ignored.",
+    "Set max_hold_days=1 to reflect that this is a day trade.",
+    "Set a 1% stop as a conservative placeholder for 'other side of the ORB'.",
+    "Added an exit on close crossing below the 200 SMA, as a stand-in for the trend filter flipping.",
+    "Symbol SPY is a default; the video does not name the ticker traded."
+  ],
+  "evidence": [
+    {
+      "rule": "entry (trend filter)",
+      "quote": "And then I use my truth filter, 200 simple moving average. If the price is above the 200 simple moving average, I'm thinking calls. Below the 200 simple moving average, I'm thinking puts."
+    },
+    {
+      "rule": "entry (NTZ breakout)",
+      "quote": "NTZ is built using pre-market high, pre-market low, yesterday's high, and yesterday's low."
+    },
+    {
+      "rule": "entry (NTZ breakout)",
+      "quote": "the only time we can actually enter into the trade is once we fully completely break out of this range."
+    },
+    {
+      "rule": "entry (ORB retest, not captured)",
+      "quote": "Opening range breakout is the range of first 15 minutes into the market open... I don't chase breakouts. I wait for the retest, break, pull back, structure, entry."
+    },
+    {
+      "rule": "entry timing (not captured)",
+      "quote": "We do not enter on the retest candle. We entered on the next candle of the retest."
+    },
+    {
+      "rule": "stop_loss",
+      "quote": "Stop loss is on the other side of the ORB."
+    },
+    {
+      "rule": "exit (profit targets)",
+      "quote": "So these levels simply become my profit taking areas. When price hits a level, I'm scaling out of a position."
+    },
+    {
+      "rule": "max_hold_days / session window",
+      "quote": "In my experience, you do not need more than 90 minutes to day trade."
+    },
+    {
+      "rule": "timeframes",
+      "quote": "First 30 minutes of the day after the market open, I'm on a two-minute chart. From 10:00 to 11:00, I'm on a 5 minute chart. And after 11:00, that's when I switch to 10-minute chart."
+    },
+    {
+      "rule": "position sizing",
+      "quote": "First trade of the day is always going to be with a small position size. If the market is clean, I'm in the rhythm, I'll size up."
+    }
+  ]
+}

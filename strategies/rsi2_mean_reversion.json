@@ -1,0 +1,13 @@
+{
+  "name": "RSI(2) pullback in uptrend",
+  "description": "Larry Connors-style: in an uptrend (close above 200 SMA), buy when 2-day RSI drops below 10, sell when close goes back above the 5-day SMA.",
+  "symbols": ["SPY", "QQQ", "IWM"],
+  "entry": {"mode": "all", "conditions": [
+    {"left": {"ind": "close"}, "op": ">", "right": {"ind": "sma", "period": 200}},
+    {"left": {"ind": "rsi", "period": 2}, "op": "<", "right": {"value": 10}}
+  ]},
+  "exit": {"mode": "any", "conditions": [{"left": {"ind": "close"}, "op": ">", "right": {"ind": "sma", "period": 5}}]},
+  "stop_loss_pct": 0.08,
+  "max_hold_days": 10,
+  "position_size_pct": 0.10
+}

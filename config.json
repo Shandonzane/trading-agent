@@ -1,0 +1,44 @@
+{
+  "mode": "paper",
+  "starting_cash": 100000,
+  "account_size": 20000,
+  "risk": {
+    "max_position_pct": 0.1,
+    "max_total_exposure_pct": 0.75,
+    "max_orders_per_day": 20,
+    "daily_loss_kill_switch_pct": 0.03,
+    "allowed_symbols": [
+      "SPY",
+      "QQQ",
+      "IWM",
+      "AAPL",
+      "MSFT",
+      "NVDA",
+      "AMZN",
+      "GOOGL",
+      "META",
+      "TSLA"
+    ],
+    "allow_short": false,
+    "allow_options": false
+  },
+  "costs": {
+    "commission_per_share": 0.0,
+    "slippage_bps": 5
+  },
+  "approval": {
+    "min_oos_trades": 8,
+    "min_oos_sharpe": 0.5,
+    "max_oos_drawdown": 0.25,
+    "must_beat_buy_hold_sharpe": true
+  },
+  "portfolio": {
+    "enabled": true,
+    "capital_pct": 0.3
+  },
+  "_account_size_note": "Agent trades as if the account were account_size. starting_cash must equal the Alpaca paper balance it was opened or last reset with; if you reset Alpaca paper to $20,000, set starting_cash to 20000 too.",
+  "trend": {
+    "enabled": true,
+    "capital_pct": 0.2
+  }
+}

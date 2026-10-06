@@ -1,0 +1,395 @@
+<title>Trading Floor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+<style>
+/* Layout: an arcade cabinet. Pixel trading floor up top, character sheets and a game log below.
+   Deliberately single-theme (night-shift arcade), so every color is set explicitly. */
+:root {
+  --bg:#0d0f1e; --panel:#171a33; --line:#2c3160; --fg:#e8ecff; --muted:#8c93c4;
+  --gold:#ffd23f; --up:#3ddc84; --down:#ff5d73; --cyan:#4cc9f0;
+  --pixel:"Press Start 2P", ui-monospace, monospace; --term:"VT323", ui-monospace, monospace;
+  color-scheme:dark;
+}
+body { background:var(--bg); color:var(--fg); font-family:var(--term); font-size:20px; line-height:1.2; }
+main { max-width:1100px; margin:0 auto; padding-inline:16px; padding-block:20px 40px; display:grid; gap:18px; }
+.hud { display:flex; flex-wrap:wrap; gap:10px 22px; align-items:center; justify-content:space-between; }
+h1 { font-family:var(--pixel); font-size:clamp(14px,3.4vw,22px); margin:0; color:var(--gold); text-shadow:3px 3px 0 #7a3cff; letter-spacing:.04em; }
+.stats { display:flex; flex-wrap:wrap; gap:8px 18px; font-family:var(--pixel); font-size:10px; }
+.stats b { display:block; font-size:14px; margin-top:4px; font-variant-numeric:tabular-nums; }
+.tag { font-family:var(--pixel); font-size:9px; padding:5px 7px; border:2px solid var(--gold); color:var(--gold); }
+.live { color:var(--up); border-color:var(--up); }
+.live.off { color:var(--muted); border-color:var(--muted); }
+.stage { border:4px solid var(--line); background:#05060f; box-shadow:0 0 0 4px #05060f, 0 0 30px rgba(76,201,240,.15); overflow:hidden; }
+canvas { display:block; width:100%; height:auto; image-rendering:pixelated; image-rendering:crisp-edges; }
+.row { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr)); gap:16px; align-items:start; }
+.sheet, .log { background:var(--panel); border:3px solid var(--line); padding:14px; min-width:0; }
+.sheet h2, .log h2 { font-family:var(--pixel); font-size:12px; margin:0 0 10px; color:var(--gold); }
+.sheet .cls { color:var(--muted); margin-bottom:8px; }
+.bar { height:12px; background:#05060f; border:2px solid var(--line); margin:3px 0 8px; }
+.bar i { display:block; height:100%; }
+.kv { display:grid; grid-template-columns:auto 1fr; gap:2px 12px; font-variant-numeric:tabular-nums; }
+.kv span:nth-child(odd) { color:var(--muted); }
+.up { color:var(--up); } .down { color:var(--down); } .muted { color:var(--muted); }
+.log ol { list-style:none; margin:0; padding:0; display:grid; gap:4px; max-height:320px; overflow:auto; }
+.log li { overflow-wrap:anywhere; }
+.log time { color:var(--muted); margin-right:6px; }
+.foot { color:var(--muted); font-size:17px; }
+button { font-family:var(--pixel); font-size:9px; background:transparent; color:var(--cyan); border:2px solid var(--cyan); padding:6px 8px; cursor:pointer; }
+button:focus-visible { outline:2px solid var(--gold); outline-offset:2px; }
+@media (prefers-reduced-motion: reduce) { canvas { animation:none; } }
+</style>
+
+<main>
+  <div class="hud">
+    <h1>TRADING FLOOR</h1>
+    <div class="stats">
+      <div>CREW P&amp;L<b id="hudPnl">$0</b></div>
+      <div>ON THE FLOOR<b id="hudCount">0</b></div>
+      <div>OPEN POSITIONS<b id="hudPos">0</b></div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <span class="tag">PAPER MONEY</span>
+      <span class="tag live off" id="liveTag">SNAPSHOT</span>
+    </div>
+  </div>
+  <div class="stage"><canvas id="floor" aria-label="Pixel trading floor showing each winning agent at their desk"></canvas></div>
+  <div class="row" id="sheets"></div>
+  <div class="row">
+    <section class="log"><h2>GAME LOG</h2><ol id="log"></ol></section>
+    <section class="log"><h2>HOW TO PLAY</h2>
+      <p style="margin:0 0 8px">Only strategies that passed their backtest and were approved get a desk. Everyone else waits in the lobby until they qualify.</p>
+      <p style="margin:0 0 8px">Faces follow paper profit and loss: a grin when up, sweat when down, a victory hop above +5%. HP drops toward the 3% daily loss kill switch.</p>
+      <p style="margin:0" class="muted" id="sourceNote"></p>
+    </section>
+  </div>
+  <div class="foot" id="foot"></div>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-asm.js"></script>
+<script>
+const SNAPSHOT = /*SNAPSHOT*/null;
+const KILL_SWITCH = 0.03;
+
+// ------------------------------------------------------------------ characters
+const CAST = {
+  "20-day breakout": {name:"TESS", title:"the Turtle", skin:"#2a9d8f", shirt:"#e9c46a", prop:"shell",
+    voice:{buy:"NEW HIGH! I'M IN.", sell:"TREND BROKE. OUT.", wait:"SHELL UP. WAITING.", hold:"RIDING IT.", blocked:"RISK DESK SAID NO."}},
+  "rsi(2) pullback in uptrend": {name:"BEA", title:"the Bounce", skin:"#e76f51", shirt:"#f4a261", prop:"ears",
+    voice:{buy:"OVERSOLD! POUNCE!", sell:"BOUNCED. CASHING.", wait:"NO PANIC YET.", hold:"WAITING ON SNAP.", blocked:"BENCHED BY RISK."}},
+  "golden cross trend (50/200 sma)": {name:"GOLDIE", title:"the Owl", skin:"#d4a017", shirt:"#6d597a", prop:"tufts",
+    voice:{buy:"THE CROSS! IN.", sell:"TREND TURNED.", wait:"HOO. NOT YET.", hold:"PATIENCE.", blocked:"OVERRULED."}},
+};
+const SPARE = [["MAX","the Rookie","#6a4c93","#c0c0c0","antenna"],["JUNO","the Scout","#1982c4","#ffca3a","antenna"],
+  ["OLLIE","the Tinkerer","#8ac926","#5c677d","antenna"],["RIO","the Gambler","#ff595e","#222","antenna"]];
+const DEFAULT_VOICE = {buy:"SIGNAL! BUYING.", sell:"EXIT HIT. SELLING.", wait:"NO SIGNAL TODAY.", hold:"HOLDING.", blocked:"RISK SAID NO."};
+function persona(strategy, used) {
+  const k = strategy.toLowerCase().trim();
+  if (CAST[k]) return CAST[k];
+  let h = 0; for (const c of k) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  for (let i = 0; i < SPARE.length; i++) {
+    const s = SPARE[(h + i) % SPARE.length];
+    if (!used.has(s[0])) return {name:s[0], title:s[1], skin:s[2], shirt:s[3], prop:s[4], voice:DEFAULT_VOICE};
+  }
+  const s = SPARE[h % SPARE.length];
+  return {name:s[0], title:s[1], skin:s[2], shirt:s[3], prop:s[4], voice:DEFAULT_VOICE};
+}
+function moodOf(ret) {
+  if (ret == null) return "eager";
+  if (ret >= 0.05) return "ecstatic";
+  if (ret >= 0.005) return "happy";
+  if (ret > -0.005) return "calm";
+  if (ret > -0.05) return "worried";
+  return "rattled";
+}
+const MOOD_TEXT = {ecstatic:"ECSTATIC", happy:"HAPPY", calm:"FOCUSED", worried:"WORRIED", rattled:"RATTLED", eager:"EAGER"};
+
+// ------------------------------------------------------------------ data model
+function money(x) { return (x > 0 ? "+" : x < 0 ? "-" : "") + "$" + Math.abs(x).toLocaleString("en-US", {maximumFractionDigits:0}); }
+function pct(x) { return (x > 0 ? "+" : x < 0 ? "-" : "") + (Math.abs(x) * 100).toFixed(2) + "%"; }
+
+function buildCrew(src) {
+  const used = new Set();
+  return src.approved.map(spec => {
+    const p = persona(spec.name, used); used.add(p.name);
+    const mine = o => o.strategy === spec.name;
+    let invested = 0, realized = 0; const book = {};
+    for (const o of src.orders.filter(mine)) {
+      const b = book[o.symbol] ||= {qty:0, cost:0};
+      if (o.side === "buy") { b.qty += o.qty; b.cost += o.qty * o.price; invested += o.qty * o.price; }
+      else if (o.side === "sell" && b.qty) {
+        const avg = b.cost / b.qty, sold = Math.min(o.qty, b.qty);
+        realized += sold * (o.price - avg); b.qty -= sold; b.cost -= sold * avg;
+      }
+    }
+    const positions = src.lots.filter(mine).map(l => {
+      const series = src.closes[l.symbol] || [];
+      const mark = series.length ? series[series.length - 1] : l.entry_price;
+      return {symbol:l.symbol, qty:l.qty, entry:l.entry_price, mark, pnl:l.qty * (mark - l.entry_price), since:l.entry_date};
+    });
+    const unreal = positions.reduce((a, x) => a + x.pnl, 0);
+    const pnl = realized + unreal;
+    const ret = invested ? pnl / invested : null;
+    const decs = src.decisions.filter(mine);
+    let words = "FIRST SHIFT. WAITING FOR THE CLOSE.";
+    if (decs.length) {
+      const lastTs = decs[decs.length - 1].ts;
+      const today = decs.filter(d => d.ts === lastTs);
+      const acted = today.filter(d => !["wait", "hold"].includes(d.action.toLowerCase()));
+      const pick = acted.length ? acted : today;
+      const a = pick[pick.length - 1].action.toLowerCase();
+      const key = ["buy","sell","hold","blocked","wait"].find(x => a.includes(x)) || "wait";
+      words = p.voice[key] + " " + [...new Set(pick.map(d => d.symbol))].join(" ");
+    }
+    const sells = src.orders.filter(o => mine(o) && o.side === "sell").length;
+    const symbols = positions.length ? positions.map(x => x.symbol) : (spec.symbols || []);
+    return {spec, p, invested, realized, unreal, pnl, ret, positions, words, mood:moodOf(ret), level:1 + sells,
+            hp: ret == null ? 1 : Math.max(0, Math.min(1, 1 + Math.min(0, ret) / KILL_SWITCH)), symbols};
+  });
+}
+
+// ------------------------------------------------------------------ pixel drawing
+const W_STATION = 120, H = 164, TOP = 34, MIN_STATIONS = 3;
+const cv = document.getElementById("floor"), ctx = cv.getContext("2d");
+let state = {crew: [], closes: {}, mode: "snapshot", offset: 0}, tick = 0;
+const R = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(x | 0, y | 0, w, h); };
+
+function drawBackdrop(W) {
+  R(0, 0, W, H, "#141634");
+  // night skyline through the window band
+  R(0, 0, W, TOP + 18, "#1b1f4a");
+  for (let i = 0; i < 40; i++) { const x = (i * 53) % W, y = 4 + (i * 17) % 22; if ((tick >> 4) % 7 !== i % 7) R(x, y, 1, 1, "#ffffff"); }
+  let x = 0, s = 7;
+  while (x < W) { s = (s * 9301 + 49297) % 233280; const w = 10 + s % 14, h = 12 + s % 26;
+    R(x, TOP + 18 - h, w, h, "#262b63");
+    for (let wy = TOP + 20 - h; wy < TOP + 14; wy += 5) for (let wx = x + 2; wx < x + w - 2; wx += 4)
+      if (((wx * 7 + wy * 3 + s) % 5) < 2) R(wx, wy, 2, 2, "#ffd23f55");
+    x += w + 1; }
+  // LED ticker
+  R(0, TOP + 18, W, 9, "#05060f");
+  const syms = Object.keys(state.closes);
+  const text = syms.length ? syms.map(k => { const c = state.closes[k]; const n = c.length;
+    const ch = n > 1 ? (c[n - 1] / c[n - 2] - 1) : 0; return `${k} ${c[n - 1].toFixed(2)} ${ch >= 0 ? "▲" : "▼"}${Math.abs(ch * 100).toFixed(1)}%`; }).join("   •   ") + "   •   "
+    : "PAPER TRADING FLOOR   •   ";
+  ctx.font = "7px 'Press Start 2P', monospace"; ctx.textBaseline = "top";
+  const tw = ctx.measureText(text).width || 1, off = -((tick * 0.5) % tw);
+  for (let k = off; k < W; k += tw) {
+    let cx = k;
+    for (const part of text.split(/(▲[\d.]+%|▼[\d.]+%)/)) {
+      ctx.fillStyle = part.startsWith("▲") ? "#3ddc84" : part.startsWith("▼") ? "#ff5d73" : "#ffd23f";
+      ctx.fillText(part, cx, TOP + 19); cx += ctx.measureText(part).width;
+    }
+  }
+  // carpet
+  for (let y = TOP + 27; y < H; y += 8) for (let xx = (y / 8) % 2 ? 0 : 8; xx < W; xx += 16) R(xx, y, 8, 8, "#191c40");
+}
+
+function drawHead(x, y, p, mood, f) {
+  const s = p.skin, dark = "#1a1a2e";
+  if (p.prop === "ears") { R(x + 2, y - 9, 3, 9, s); R(x + 9, y - 9, 3, 9, s); R(x + 3, y - 8, 1, 7, "#ffc8b4"); R(x + 10, y - 8, 1, 7, "#ffc8b4"); }
+  if (p.prop === "antenna") { R(x + 7, y - 6, 1, 5, dark); R(x + 6, y - 8, 3, 3, f % 30 < 15 ? "#ff5d73" : "#ffd23f"); }
+  if (p.prop === "tufts") { R(x + 1, y - 3, 3, 3, s); R(x + 11, y - 3, 3, 3, s); }
+  R(x + 2, y, 11, 1, s); R(x + 1, y + 1, 13, 10, s); R(x + 2, y + 11, 11, 1, s);
+  if (p.prop === "shell") { R(x + 1, y - 2, 13, 4, "#264653"); R(x + 3, y - 3, 9, 1, "#264653"); R(x + 5, y - 2, 1, 3, "#2a9d8f"); R(x + 9, y - 2, 1, 3, "#2a9d8f"); }
+  if (p.prop === "tufts") { R(x + 3, y + 3, 4, 4, "#fff3"); R(x + 8, y + 3, 4, 4, "#fff3"); }
+  // eyes
+  const blink = f % 120 < 4;
+  if (mood === "ecstatic") { for (const ex of [4, 9]) { R(x + ex, y + 4, 2, 1, "#ffd23f"); R(x + ex - 1 + 1, y + 3, 1, 3, "#ffd23f"); } }
+  else if (blink) { R(x + 4, y + 5, 2, 1, dark); R(x + 9, y + 5, 2, 1, dark); }
+  else { R(x + 4, y + 4, 2, 2, "#fff"); R(x + 9, y + 4, 2, 2, "#fff"); R(x + 5, y + 5, 1, 1, dark); R(x + 10, y + 5, 1, 1, dark);
+    if (mood === "worried" || mood === "rattled") { R(x + 3, y + 2, 3, 1, dark); R(x + 9, y + 2, 3, 1, dark); } }
+  // mouth
+  if (mood === "ecstatic") { R(x + 5, y + 7, 5, 2, dark); R(x + 6, y + 8, 3, 1, "#ff8fa3"); }
+  else if (mood === "happy" || mood === "eager") { R(x + 4, y + 7, 1, 1, dark); R(x + 5, y + 8, 5, 1, dark); R(x + 10, y + 7, 1, 1, dark); }
+  else if (mood === "calm") { R(x + 5, y + 8, 5, 1, dark); }
+  else if (mood === "worried") { R(x + 5, y + 8, 5, 1, dark); R(x + 4, y + 9, 1, 1, dark); R(x + 10, y + 9, 1, 1, dark); }
+  else { R(x + 6, y + 7, 3, 3, dark); }
+  if (mood === "happy" || mood === "ecstatic") { R(x + 2, y + 7, 2, 1, "#ff8fa388"); R(x + 11, y + 7, 2, 1, "#ff8fa388"); }
+  if (mood === "worried" || mood === "rattled") { const d = (f >> 2) % 6; R(x + 14, y + 2 + d, 2, 3, "#7cc6fe"); }
+}
+
+function drawMonitor(x, y, a, f) {
+  R(x, y, 34, 24, "#3a3f6b"); R(x + 2, y + 2, 30, 18, "#05060f"); R(x + 15, y + 24, 4, 4, "#3a3f6b"); R(x + 10, y + 28, 14, 2, "#3a3f6b");
+  const syms = a.symbols.filter(s => state.closes[s]);
+  if (!syms.length) { if ((f >> 4) % 2) R(x + 4, y + 4, 2, 4, "#3ddc84"); return; }
+  const sym = syms[Math.floor(f / 240) % syms.length], c = state.closes[sym].slice(-28);
+  const lo = Math.min(...c), hi = Math.max(...c), up = c[c.length - 1] >= c[0];
+  const pos = a.positions.find(p => p.symbol === sym);
+  if (pos) { const yy = y + 18 - 9 * (pos.entry - lo) / ((hi - lo) || 1); if (yy > y + 8 && yy < y + 20) for (let i = 3; i < 31; i += 3) R(x + i, yy, 1, 1, "#ffd23f"); }
+  const Y = v => Math.round(y + 18 - 9 * (v - lo) / ((hi - lo) || 1));
+  for (let i = 0; i < c.length; i++) {
+    const a1 = Y(c[i]), a0 = i ? Y(c[i - 1]) : a1;
+    R(x + 3 + i, Math.min(a0, a1), 1, Math.abs(a1 - a0) + 1, up ? "#3ddc84" : "#ff5d73");
+  }
+  ctx.font = "5px 'Press Start 2P', monospace"; ctx.fillStyle = "#e8ecff"; ctx.fillText(sym, x + 3, y + 3);
+}
+
+function bubble(x, y, text, f) {
+  ctx.font = "5px 'Press Start 2P', monospace";
+  const shown = text.slice(0, Math.min(text.length, Math.floor((f % 480) / 3)));
+  const words = shown.split(" "), lines = [""];
+  for (const w of words) { const t = (lines[lines.length - 1] + " " + w).trim(); if (ctx.measureText(t).width > 92) lines.push(w); else lines[lines.length - 1] = t; }
+  const h = lines.length * 7 + 5, w = 100;
+  R(x, y, w, h, "#e8ecff"); R(x - 1, y + 1, 1, h - 2, "#e8ecff"); R(x + w, y + 1, 1, h - 2, "#e8ecff"); R(x + 30, y + h, 4, 3, "#e8ecff");
+  ctx.fillStyle = "#0d0f1e"; lines.forEach((l, i) => ctx.fillText(l, x + 4, y + 3 + i * 7));
+}
+
+function drawStation(i, a, f) {
+  const ox = state.offset + i * W_STATION + 6, floorY = 142;
+  R(ox + 4, floorY + 6, 104, 3, "#0b0c22");                // shadow
+  if (!a) {                                                 // empty desk for the next qualifier
+    R(ox + 10, floorY - 22, 90, 6, "#5b4a3a"); R(ox + 14, floorY - 16, 4, 22, "#4a3b2e"); R(ox + 92, floorY - 16, 4, 22, "#4a3b2e");
+    drawMonitorOff(ox + 20, floorY - 52);
+    ctx.font = "5px 'Press Start 2P', monospace"; ctx.fillStyle = "#8c93c4";
+    ctx.fillText("DESK OPEN", ox + 32, floorY - 4 + 0); ctx.fillText("PASS A BACKTEST", ox + 18, floorY + 12 - 0);
+    return;
+  }
+  const m = a.mood;
+  let bob = 0, shake = 0;
+  if (m === "ecstatic") bob = -Math.abs(Math.round(Math.sin(f / 6) * 6));
+  else if (m === "rattled") shake = (f % 4 < 2) ? 1 : -1;
+  // chair
+  R(ox + 62, floorY - 38, 22, 26, "#3d2c5e"); R(ox + 71, floorY - 12, 4, 12, "#2a1f40"); R(ox + 64, floorY, 18, 2, "#2a1f40");
+  // body
+  const bx = ox + 63 + shake, by = floorY - 34 + bob;
+  R(bx + 2, by + 14, 16, 14, a.p.shirt); R(bx + 4, by + 13, 12, 1, a.p.shirt);
+  drawHead(bx + 2, by, a.p, m, f);
+  // desk + keyboard
+  R(ox + 6, floorY - 22, 74, 6, "#7a5c45"); R(ox + 6, floorY - 16, 74, 2, "#5b4a3a"); R(ox + 10, floorY - 16, 4, 22, "#4a3b2e"); R(ox + 72, floorY - 16, 4, 22, "#4a3b2e");
+  R(ox + 40, floorY - 25, 20, 3, "#c9cde8");
+  // arms typing
+  const typing = m !== "ecstatic" && (f >> 3) % 2;
+  R(bx - 6, by + 19 + (typing ? 1 : 0), 10, 3, a.p.shirt); R(bx - 8, by + 20 + (typing ? 1 : 0), 3, 3, a.p.skin);
+  if (m === "ecstatic") { R(bx + 17, by + 6, 3, 10, a.p.shirt); R(bx + 17, by + 3, 3, 3, a.p.skin); }  // fist pump
+  // coffee mug
+  R(ox + 20, floorY - 28, 5, 6, "#e8ecff"); R(ox + 25, floorY - 27, 2, 3, "#e8ecff"); if ((f >> 4) % 2) R(ox + 21, floorY - 33, 1, 3, "#ffffff55");
+  drawMonitor(ox + 30, floorY - 56, a, f);
+  bubble(ox + 6, TOP + 30 - 2, a.words, f + i * 97);
+  // name plate
+  ctx.font = "5px 'Press Start 2P', monospace"; ctx.fillStyle = "#ffd23f"; ctx.fillText(a.p.name, ox + 8, floorY + 10);
+  ctx.fillStyle = a.pnl > 0 ? "#3ddc84" : a.pnl < 0 ? "#ff5d73" : "#e8ecff"; ctx.fillText(money(a.pnl), ox + 52, floorY + 10);
+}
+function drawMonitorOff(x, y) { R(x, y, 34, 24, "#3a3f6b"); R(x + 2, y + 2, 30, 18, "#0a0b1a"); R(x + 15, y + 24, 4, 6, "#3a3f6b"); }
+
+function frame() {
+  const n = state.crew.length + 1;                         // +1 empty desk
+  const W = Math.max(n, cv.parentElement.clientWidth < 600 ? 0 : MIN_STATIONS) * W_STATION + 12;
+  state.offset = Math.floor((W - 12 - n * W_STATION) / 2);
+  const scale = Math.max(1, Math.floor((cv.parentElement.clientWidth * devicePixelRatio) / W));
+  if (cv.width !== W * scale) { cv.width = W * scale; cv.height = H * scale; }
+  ctx.setTransform(scale, 0, 0, scale, 0, 0); ctx.imageSmoothingEnabled = false;
+  drawBackdrop(W);
+  state.crew.forEach((a, i) => drawStation(i, a, tick));
+  drawStation(state.crew.length, null, tick);
+  tick++;
+}
+const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+function loop() { frame(); if (!still) requestAnimationFrame(loop); }
+
+// ------------------------------------------------------------------ HTML panels
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function renderPanels(src) {
+  const crew = state.crew, total = crew.reduce((a, c) => a + c.pnl, 0);
+  const hp = document.getElementById("hudPnl"); hp.textContent = money(total); hp.className = total > 0 ? "up" : total < 0 ? "down" : "";
+  document.getElementById("hudCount").textContent = crew.length;
+  document.getElementById("hudPos").textContent = crew.reduce((a, c) => a + c.positions.length, 0);
+  document.getElementById("sheets").innerHTML = crew.map(a => `
+    <section class="sheet">
+      <h2>${esc(a.p.name)} ${esc(a.p.title.toUpperCase())}</h2>
+      <div class="cls">CLASS: ${esc(a.spec.name)} · LV ${a.level} · ${MOOD_TEXT[a.mood]}</div>
+      <div class="muted">HP (room before kill switch)</div><div class="bar"><i style="width:${(a.hp * 100).toFixed(0)}%;background:${a.hp > .5 ? "var(--up)" : a.hp > .2 ? "var(--gold)" : "var(--down)"}"></i></div>
+      <div class="kv">
+        <span>P&amp;L</span><span class="${a.pnl > 0 ? "up" : a.pnl < 0 ? "down" : ""}">${money(a.pnl)}${a.ret != null ? " (" + pct(a.ret) + ")" : ""}</span>
+        <span>Invested</span><span>$${a.invested.toLocaleString("en-US", {maximumFractionDigits:0})}</span>
+        <span>Banked</span><span>${money(a.realized)}</span>
+        ${a.positions.map(p => `<span>${esc(p.symbol)}</span><span>${p.qty} @ $${p.entry.toFixed(2)} → $${p.mark.toFixed(2)} <span class="${p.pnl > 0 ? "up" : p.pnl < 0 ? "down" : ""}">${money(p.pnl)}</span></span>`).join("")}
+        <span>Watching</span><span>${esc((a.spec.symbols || []).join(" "))}</span>
+      </div>
+    </section>`).join("") || `<section class="sheet"><h2>NO PLAYERS YET</h2>No strategy has passed its backtest and been approved.</section>`;
+  const names = Object.fromEntries(crew.map(a => [a.spec.name, a.p.name]));
+  const ev = src.decisions.filter(d => names[d.strategy]).slice(-30).reverse();
+  document.getElementById("log").innerHTML = ev.map(d => {
+    const t = new Date(d.ts), det = (() => { try { return JSON.parse(d.detail || "{}"); } catch { return {}; } })();
+    const act = d.action.toUpperCase(), cls = act.includes("BUY") ? "up" : act.includes("SELL") ? "down" : "muted";
+    return `<li><time>${t.toLocaleDateString("en-US", {month:"short", day:"numeric"})} ${t.toLocaleTimeString("en-US", {hour:"2-digit", minute:"2-digit"})}</time>`
+      + `<b>${esc(names[d.strategy])}</b> <span class="${cls}">${esc(act)}</span> ${esc(d.symbol)}`
+      + (det.qty ? ` ${det.qty} @ $${Number(det.price).toFixed(2)}` : "") + ` <span class="muted">· ${esc(d.reason)}</span></li>`;
+  }).join("") || "<li class='muted'>No moves yet. The agent runs after each market close.</li>";
+  document.getElementById("foot").textContent = state.mode === "live"
+    ? `Live from the project files · checked ${new Date().toLocaleTimeString("en-US")} · prices are the last daily close`
+    : `Snapshot from ${new Date(src.generatedAt).toLocaleString("en-US")} · prices are the last daily close`;
+  const tag = document.getElementById("liveTag");
+  tag.textContent = state.mode === "live" ? "● LIVE" : "SNAPSHOT"; tag.classList.toggle("off", state.mode !== "live");
+}
+
+function apply(src) {
+  state.closes = src.closes; state.crew = buildCrew(src); renderPanels(src);
+}
+
+// ------------------------------------------------------------------ live data from the project files
+const PROJECT_ROOTS = ["trading-agent", "/trading-agent"];
+let files = null, root = null, lastRev = "";
+async function readText(path, opts) { const r = await files.read(path, opts); return {text:new TextDecoder().decode(r.bytes), size:r.size, revision:r.revision}; }
+async function findRoot() {
+  for (const r of PROJECT_ROOTS) { try { await files.list({path: r + "/strategies/approved"}); return r; } catch (e) { if (e && e.code === "not_granted") throw e; } }
+  const top = await files.list();
+  const hit = top.entries.find(e => e.isDirectory && /trading-agent\/?$/.test(e.path));
+  if (hit) return hit.path.replace(/\/$/, "");
+  throw {code:"not_found"};
+}
+async function lastCloses(sym) {
+  const path = `${root}/data/cache/${sym}.csv`;
+  const head = await files.read(path, {offset:0, length:1});
+  const off = Math.max(0, head.size - 6000);
+  const {text} = await readText(path, {offset:off, length:6000});
+  return text.trim().split("\n").slice(off ? 1 : 1).map(l => l.split(",")).filter(c => c.length > 4 && !isNaN(+c[4])).map(c => +c[4]).slice(-60);
+}
+let SQL = null;
+async function loadLive() {
+  const ls = await files.list({path: root + "/strategies/approved"});
+  const approved = [];
+  for (const e of ls.entries.filter(e => !e.isDirectory && e.path.endsWith(".json"))) {
+    try { const s = JSON.parse((await readText(e.path)).text); approved.push({name:s.name, symbols:s.symbols || []}); } catch {}
+  }
+  let orders = [], lots = [], decisions = [], rev = "";
+  try {
+    const j = await files.read(root + "/data/journal.sqlite"); rev = j.revision;
+    SQL ||= await initSqlJs();
+    const db = new SQL.Database(j.bytes);
+    const rows = sql => { const r = db.exec(sql)[0]; return r ? r.values.map(v => Object.fromEntries(r.columns.map((c, i) => [c, v[i]]))) : []; };
+    orders = rows("SELECT * FROM orders ORDER BY ts"); lots = rows("SELECT * FROM lots"); decisions = rows("SELECT * FROM decisions ORDER BY ts");
+    db.close();
+  } catch (e) { if (e && e.code === "not_granted") throw e; }
+  const syms = new Set(); approved.forEach(a => a.symbols.forEach(s => syms.add(s))); lots.forEach(l => syms.add(l.symbol));
+  const closes = {};
+  for (const s of syms) { try { const c = await lastCloses(s); if (c.length) closes[s] = c; } catch {} }
+  return {approved, orders, lots, decisions, closes, generatedAt:new Date().toISOString(), rev};
+}
+async function goLive() {
+  const note = document.getElementById("sourceNote");
+  try {
+    files = await claude.use("files");
+    if (!files) { note.textContent = "Showing a snapshot. Live updates need a signed-in project member."; return; }
+    root = await findRoot();
+    const refresh = async () => {
+      try { const src = await loadLive(); state.mode = "live"; apply(src); lastRev = src.rev; }
+      catch (e) { if (e && e.code === "not_granted") { note.textContent = "Showing a snapshot. You chose not to share project files with this page."; return true; } }
+    };
+    if (await refresh()) return;
+    note.textContent = "Live: reads the paper journal from the project every minute.";
+    setInterval(refresh, 60000);
+  } catch (e) {
+    note.textContent = e && e.code === "not_granted" ? "Showing a snapshot. You chose not to share project files with this page." : "Showing a snapshot. Live data isn't reachable right now.";
+  }
+}
+
+if (SNAPSHOT) apply(SNAPSHOT);
+document.fonts && document.fonts.ready.then(() => {});
+loop();
+addEventListener("resize", () => { if (still) frame(); });
+// The viewer adds window.claude shortly after load; outside claude.ai it never appears.
+(function waitForViewer(n) {
+  if (window.claude && typeof window.claude.use === "function") return goLive();
+  if (n > 20) { document.getElementById("sourceNote").textContent = "Showing a snapshot."; return; }
+  setTimeout(() => waitForViewer(n + 1), 250);
+})(0);
+</script>

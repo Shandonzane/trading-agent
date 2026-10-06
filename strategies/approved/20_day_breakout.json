@@ -1,0 +1,45 @@
+{
+  "name": "20-day breakout",
+  "description": "Turtle-style: buy a close above the prior 20-day high, exit on a close below the prior 10-day low.",
+  "symbols": [
+    "QQQ",
+    "SPY"
+  ],
+  "direction": "long",
+  "entry": {
+    "mode": "all",
+    "conditions": [
+      {
+        "left": {
+          "ind": "close"
+        },
+        "op": ">",
+        "right": {
+          "ind": "highest",
+          "period": 20
+        }
+      }
+    ]
+  },
+  "exit": {
+    "mode": "any",
+    "conditions": [
+      {
+        "left": {
+          "ind": "close"
+        },
+        "op": "<",
+        "right": {
+          "ind": "lowest",
+          "period": 10
+        }
+      }
+    ]
+  },
+  "stop_loss_pct": 0.07,
+  "position_size_pct": 0.1,
+  "complete": true,
+  "missing": [],
+  "assumptions": [],
+  "evidence": []
+}

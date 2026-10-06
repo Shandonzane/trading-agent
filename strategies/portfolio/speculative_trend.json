@@ -1,0 +1,101 @@
+{
+  "name": "Speculative + trend (paper)",
+  "description": "Split core with a thematic tilt and a 200-day trend rule on the SPY part. From research/speculative-outlook.md, tested 2006-2026: 7.8%/yr, Sharpe 0.71, worst drop -26% vs SPY 11.3%/0.65/-55%.",
+  "mode": "paper",
+  "rebalance": "quarterly (first trading day of Jan/Apr/Jul/Oct), plus whenever the trend or momentum rule flips",
+  "drift_band": 0.03,
+  "sleeves": {
+    "core_spy_trend": {
+      "weight": 0.25,
+      "rule": "SPY while SPY close > 200-day SMA at the prior close, else SHY"
+    },
+    "core_equal_weight": {
+      "weight": 0.1,
+      "hold": "RSP"
+    },
+    "ex_us_momentum": {
+      "weight": 0.15,
+      "rule": "monthly: best 12-month return among EFA, EEM, EWJ; SHY if the best is negative"
+    },
+    "put_write": {
+      "weight": 0.1,
+      "hold": "XYLD",
+      "note": "S&P 500 covered-call ETF as the option-income proxy (PUTW is not on Alpaca); swap for the cash-secured-put wheel once the paper-trading thread runs options"
+    },
+    "gold": {
+      "weight": 0.12,
+      "hold": "GLD"
+    },
+    "power": {
+      "weight": 0.08,
+      "hold": "XLU"
+    },
+    "energy": {
+      "weight": 0.07,
+      "hold": "XLE"
+    },
+    "homebuilders": {
+      "weight": 0.06,
+      "hold": "ITB"
+    },
+    "long_bonds": {
+      "weight": 0.05,
+      "hold": "TLT"
+    },
+    "cash": {
+      "weight": 0.02,
+      "hold": "SHY"
+    }
+  },
+  "watch_flags": [
+    {
+      "id": "hyperscaler_capex_cut",
+      "type": "news",
+      "trigger": "a top-5 hyperscaler cuts next-year capex guidance",
+      "action": "cut core_spy_trend and core_equal_weight by half into SHY; raise gold and long_bonds"
+    },
+    {
+      "id": "private_credit_gate",
+      "type": "news",
+      "trigger": "a named private-credit fund SUSPENDS redemptions entirely, or fails to pay out its stated redemption cap (routine 5% pro-rating does not count)",
+      "action": "panic playbook: core to SHY regardless of trend, keep gold, bonds, put_write",
+      "yellow": "requests above 25% of a fund in one quarter, or two or more funds capping in the same quarter: note it, raise cash by 5 pts, no other action"
+    },
+    {
+      "id": "taiwan_rare_earths",
+      "type": "news",
+      "trigger": "blockade, strike, or rare-earth export cutoff to the US",
+      "action": "panic playbook"
+    },
+    {
+      "id": "yield_spike",
+      "type": "data",
+      "trigger": "10-year Treasury yield closes above 5.5%",
+      "action": "sell long_bonds into SHY; add to energy and gold"
+    },
+    {
+      "id": "fed_hike",
+      "type": "data",
+      "trigger": "fed funds effective rate rises 0.25 pt or more within 60 days",
+      "action": "stagflation tilt: homebuilders to 0, split evenly into energy and gold (sizes set by the paper-trading thread, 2026-10-06)"
+    },
+    {
+      "id": "small_cap_leadership",
+      "type": "data",
+      "trigger": "IWM beats SPY over each of the last two calendar quarters",
+      "action": "move 10 pts from core_spy_trend to core_equal_weight"
+    },
+    {
+      "id": "vix_panic",
+      "type": "data",
+      "trigger": "VIX closes above 35",
+      "action": "deploy cash into SPY; unwind when VIX closes below 20"
+    }
+  ],
+  "hard_limits": {
+    "max_single_etf": 0.3,
+    "no_leverage": true,
+    "no_short_positions": true,
+    "no_single_stocks": true
+  }
+}

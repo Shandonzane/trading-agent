@@ -1,0 +1,106 @@
+{
+  "summary": "The video teaches the options 'wheel'. You sell a cash-secured put about a month out (third-Friday expiration) at a strike below the market where you would like to own the stock. If assigned, you sell monthly covered calls about 25 points above your cost and keep re-selling them until the shares are called away. Then you go back to selling puts. The QQQ example (Oct 2025 to Feb 2026) claims $5,813 in premiums plus share gains, versus $488 from simply holding.",
+  "has_testable_strategy": true,
+  "why_not_testable": [
+    "The real P&L comes from option premiums, which a daily-bar, long-only stock backtester cannot model. Only the share-ownership leg (assignment, then call-away) can be approximated.",
+    "The put strike (the 'price you want to pay') is chosen by discretion. The only example is 595 vs a 603.93 close, about 1.5% below market, and no general rule is given.",
+    "Stock selection ('a stock you want to own', 'solid stocks') is discretionary."
+  ],
+  "strategies": [
+    {
+      "name": "Wheel strategy – underlying share leg approximation",
+      "description": "Approximates when the wheel ends up owning shares and when they get called away. A short put about 1.5% OTM sold ~25 trading days earlier is assigned if price finishes below the strike, approximated as a 25-bar decline greater than 1.5%. Shares are called away when price closes above a call strike about 25 points (~4.2% on QQQ) above the assignment price, approximated as a take-profit. Option premiums (the main profit source in the video) are NOT captured.",
+      "source_url": "https://www.youtube.com/watch?v=K6YVPHULzPA",
+      "symbols": [
+        "QQQ",
+        "AMZN",
+        "WMT",
+        "CAT",
+        "TSLA",
+        "JPM"
+      ],
+      "direction": "long",
+      "entry": {
+        "mode": "all",
+        "conditions": [
+          {
+            "left": {
+              "ind": "pct_change",
+              "period": 25
+            },
+            "op": "<",
+            "right": {
+              "value": -1.5
+            }
+          }
+        ]
+      },
+      "stop_loss_pct": 0.1,
+      "take_profit_pct": 0.042,
+      "position_size_pct": 0.1,
+      "complete": false,
+      "missing": [
+        "Option premium income from the short puts and short calls, which is most of the strategy's return, cannot be modeled by this backtester.",
+        "No general rule for choosing the put strike. The only example is ~1.5% below the current close (595 vs 603.93).",
+        "Call strike is given in absolute points (25 points above cost). No percentage or delta rule is given for other stocks.",
+        "No stop loss or rule for managing a large decline after assignment. The wheel simply keeps selling calls.",
+        "Assignment only happens at monthly expiration (third Friday), which daily signal checks cannot replicate exactly.",
+        "No position-sizing rule beyond holding enough cash to cover 100 shares at the strike."
+      ],
+      "assumptions": [
+        "Put assignment approximated by a 25-trading-day (~35 calendar days) percent change below -1.5%, matching the ~1.5% OTM put strike in the example. pct_change is assumed to be expressed in percent units.",
+        "Call-away approximated by a take-profit of 4.2% (25 points / 595 in the QQQ example).",
+        "Stop loss of 10% added as a conservative default. The video gives no stop, and the real wheel would hold and keep selling calls.",
+        "Position size left at the 10% default. The video uses one cash-secured lot (~$59,500 of capital for 100 QQQ shares).",
+        "Other tickers are included only because the speaker said the technique works the same on them. The point-based strike rule does not translate directly to them."
+      ],
+      "evidence": [
+        {
+          "rule": "entry",
+          "quote": "let's say we want to buy 100 shares of the Q's when they come back to 595"
+        },
+        {
+          "rule": "entry",
+          "quote": "we're going to be selling a put at that price, 595, about a month out on the 3rd Friday of November"
+        },
+        {
+          "rule": "entry",
+          "quote": "you are obligated to buy 100 shares of the stock at that strike price if the shares close lower than that on the day the put option expires"
+        },
+        {
+          "rule": "take_profit",
+          "quote": "we'd sell a call that is approximately 25 points above the price that we were assigned those shares so that we give the stock some room to run up before we are obligated to sell it"
+        },
+        {
+          "rule": "take_profit",
+          "quote": "we just run it right back and sell that same 620 call into the third Friday in January"
+        },
+        {
+          "rule": "exit",
+          "quote": "when this happens, you are required to sell the shares at the strike price of the call. So you've got to sell them at 620"
+        },
+        {
+          "rule": "re-entry",
+          "quote": "We start all over again and sell a put below where the stock price is, hoping to catch another opportunity to buy it at a great price"
+        },
+        {
+          "rule": "symbols",
+          "quote": "It could be Amazon or Walmart or Caterpillar or Tesla or JP Morgan or whatever. It doesn't matter. It's the same technique."
+        },
+        {
+          "rule": "position_size",
+          "quote": "you're going to need to have 59,500 in your account to do this"
+        }
+      ]
+    }
+  ],
+  "non_mechanical_ideas": [
+    "Only run the wheel on a stock you actually want to own long term, and only at a price you consider fair.",
+    "Don't chase. Wait for retracements in an uptrend rather than buying at the highs.",
+    "Premium collected is kept regardless of outcome, so the speaker frames it as 'getting paid while you wait'.",
+    "Call premiums rise as price approaches the call strike, which the speaker frames as good for the seller.",
+    "The claim that Warren Buffett uses this approach is anecdotal and not a rule.",
+    "The video ends with a pitch for a free workshop at optionsclass.com."
+  ],
+  "options_notes": "Wheel: (1) Sell a cash-secured put about 30-35 DTE, expiring on the next month's third Friday, at a strike roughly 1.5% below the current price (example: QQQ 595 put for $12.49 with QQQ at 603.93). (2) If assigned, sell a covered call about 25 points (~4.2%) above the assignment price, again at the next month's third-Friday expiration (example: 620 call for $4.90). (3) If the call expires worthless, re-sell the same strike for the following month (620 call for $9.89). (4) When the shares are called away, return to selling puts at the original strike (595 put for $5.85). No delta targets, rolling rules, or defensive adjustments are given. Each cycle requires cash for 100 shares at the put strike."
+}

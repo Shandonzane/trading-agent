@@ -1,0 +1,8 @@
+.env
+__pycache__/
+.pytest_cache/
+data/
+*.sqlite
+results/**/*.json
+results/**/*.csv
+dashboard/floor3d_v4_backup.html

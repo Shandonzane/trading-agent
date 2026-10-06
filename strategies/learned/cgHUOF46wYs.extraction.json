@@ -1,0 +1,22 @@
+{
+  "summary": "This is an introductory explainer of the options 'wheel' strategy. You use collateral, either 100 shares or enough cash to buy 100 shares, to repeatedly sell (write) covered calls and cash-secured puts and collect premium. The speaker walks through a Robinhood options chain on AT&T (T), explaining strike price, premium, breakeven, expiration and assignment risk, and notes that premium is taxed as ordinary income.",
+  "has_testable_strategy": false,
+  "why_not_testable": [
+    "The video gives no stock entry or exit signal. Strike selection is a personal judgement: puts at 'a price I'd be happy to buy at', calls at 'a price I'd be happy selling at' relative to your own cost basis.",
+    "The P&L comes from selling option premium and from assignment, which a long-only daily stock backtester can't model.",
+    "No expiration rule (DTE), delta or strike-distance rule, profit-taking rule or stop/roll rule is given. Examples just use about 1-2 week expirations and strikes near $1 out of the money.",
+    "The speaker sometimes sells a put at or just above the money 'if I think it's going to shoot up in the next day or two'. That is a discretionary market call, not a rule."
+  ],
+  "strategies": [],
+  "non_mechanical_ideas": [
+    "Only run the wheel on stocks you're willing to own. Always assume you will be assigned, then hope you aren't. Don't use a stock you're 'married to' or one with large unrealized gains, since being called away realizes taxable gains.",
+    "Never sell a cash-secured put far above the share price. The intrinsic loss outweighs the premium (example: a $29 strike with the stock at $27 for $1.99 premium).",
+    "Strikes closer to the share price pay more premium but carry a higher chance of assignment.",
+    "Cash-secured puts must be fully cash-covered. No naked puts.",
+    "Premium arrives as buying power immediately once the option is filled. It shows up in portfolio value only after expiration.",
+    "Early assignment is unlikely far from expiration and becomes more likely as expiration approaches.",
+    "Beginners can mostly ignore the Greeks and the 'chance of profit' figure, which the speaker calls speculative.",
+    "Premium income is taxed as ordinary income. Capital gains from called-away shares are short- or long-term depending on holding period."
+  ],
+  "options_notes": "Wheel strategy: sell cash-secured puts below the current price at a strike you'd be happy to buy at (example: T at $27.04, sell the $26 put for $0.14, i.e. $14 per contract, breakeven $25.86, $2,600 cash collateral). If assigned, hold the 100 shares and sell covered calls above your cost basis at a strike you'd be happy selling at (example: cost basis $25, sell the $28 call for about $0.11). If the shares are called away, go back to selling puts. Examples used about 1-2 week expirations. No delta, DTE or management (close/roll) rules are specified. Symbol discussed: T (AT&T)."
+}
