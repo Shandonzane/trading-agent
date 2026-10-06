@@ -33,6 +33,10 @@ class RiskManager:
         return acct.last_equity > 0 and (acct.equity / acct.last_equity - 1) <= -self.r["daily_loss_kill_switch_pct"]
 
     def check_buy(self, symbol: str, qty: float, price: float, acct: Account, positions_value: float):
+        from .live import halted_today
+
+        if halted_today():
+            raise RiskBlock("live monitor halted new buys today (intraday kill switch)")
         if symbol not in self.r["allowed_symbols"]:
             raise RiskBlock(f"{symbol} not in allowed_symbols")
         if self.orders_today() >= self.r["max_orders_per_day"]:

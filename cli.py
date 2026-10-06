@@ -66,6 +66,9 @@ def main(argv=None):
     apv = sub.add_parser("approve")
     apv.add_argument("spec")
     sub.add_parser("run-agent")
+    lv = sub.add_parser("live", help="stream quotes, news and fills; intraday kill switch (paper)")
+    lv.add_argument("--forever", action="store_true", help="don't stop at the market close")
+    sub.add_parser("serve", help="always-on: live monitor in market hours + feed over HTTP (for a server)")
     bi = sub.add_parser("backtest-intraday", help="opening-range day-trade presets on 5-minute bars")
     bi.add_argument("--preset", action="append")
     bi.add_argument("--symbol", action="append")
@@ -122,6 +125,14 @@ def main(argv=None):
                       f"  out-of-sample Sharpe {om.get('sharpe', 0):.2f} vs B&H {res['oos_benchmark'].get('sharpe', 0):.2f}")
                 for r in res["verdict_reasons"]:
                     print(f"   - {r}")
+    elif a.cmd == "live":
+        from tradebot.live import main as live_main
+
+        live_main(until_close=not a.forever)
+    elif a.cmd == "serve":
+        from tradebot.server import main as serve_main
+
+        serve_main()
     elif a.cmd == "run-agent":
         from tradebot.agent import run_once
 
