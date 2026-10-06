@@ -21,6 +21,32 @@ def _rules(s: dict) -> dict:
             "stop_loss_pct": s.get("stop_loss_pct"), "position_size_pct": s.get("position_size_pct"), "max_hold_days": s.get("max_hold_days")}
 
 
+def live_feed(root: Path = ROOT) -> dict | None:
+    """Latest output of the paper account's live monitor (tradebot/live.py), thinned to [ms, close] bars."""
+    d = root / "data" / "live"
+    try:
+        state = json.loads((d / "state.json").read_text())
+    except Exception:
+        return None
+    bars, events = {}, []
+    feeds = sorted(d.glob("feed-*.jsonl"))
+    for line in feeds[-1].read_text().splitlines() if feeds else []:
+        try:
+            e = json.loads(line)
+        except Exception:
+            continue
+        if e.get("kind") == "bar" and e.get("c") is not None:
+            t = int(datetime.fromisoformat(str(e["t"]).replace(" ", "T")).timestamp() * 1000)
+            arr = bars.setdefault(e["symbol"], [])
+            if arr and arr[-1][0] == t:
+                arr[-1][1] = e["c"]
+            elif not arr or t > arr[-1][0]:
+                arr.append([t, e["c"]])
+        elif e.get("kind") in ("halt", "error", "start", "stop"):
+            events.insert(0, e)
+    return {"state": state, "bars": bars, "events": events[:30]}
+
+
 def snapshot(root: Path = ROOT) -> dict:
     approved, strategies = [], {}
     for f in sorted((root / "strategies").rglob("*.json")):
@@ -76,12 +102,25 @@ def snapshot(root: Path = ROOT) -> dict:
         except Exception:
             account = None
     return {"approved": approved, "strategies": list(strategies.values()), "results": results, **rows, "closes": closes,
-            "account": account, "generatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+            "account": account, "live": live_feed(root), "generatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+
+
+def build(out: Path, server: bool = False) -> Path:
+    """server=True builds the copy the paper-trading server hosts at /floor: it reads that server's
+    /state.json and /feed instead of the project files, so the stale local live feed is left out."""
+    tpl = (Path(__file__).parent / "floor3d_template.html").read_text()
+    snap = snapshot()
+    if server:
+        snap["live"] = None
+        tpl = tpl.replace("/*SERVERMODE*/false", "true")
+    out.write_text(tpl.replace("/*SNAPSHOT*/null", json.dumps(snap).replace("</", "<\\/")))
+    return out
 
 
 if __name__ == "__main__":
-    out = Path(sys.argv[1] if len(sys.argv) > 1 else "trading_floor.html")
-    tpl = (Path(__file__).parent / "floor3d_template.html").read_text()
-    data = json.dumps(snapshot()).replace("</", "<\\/")
-    out.write_text(tpl.replace("/*SNAPSHOT*/null", data))
-    print(out)
+    # python dashboard/floor_page.py out.html            -> artifact copy (reads project files)
+    # python dashboard/floor_page.py --server            -> dashboard/floor_server.html for the Railway server
+    if "--server" in sys.argv:
+        print(build(Path(__file__).parent / "floor_server.html", server=True))
+    else:
+        print(build(Path(sys.argv[1] if len(sys.argv) > 1 else "trading_floor.html")))

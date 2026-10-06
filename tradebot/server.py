@@ -7,7 +7,8 @@
 - Outside market hours it sleeps until a minute before the next open.
 - Serves the live feed over HTTP on $PORT for the dashboard:
     GET /state.json?token=FEED_TOKEN     latest snapshot
-    GET /feed?token=FEED_TOKEN&n=200     last n events from today's feed
+    GET /feed?token=FEED_TOKEN&n=200     last n events from today's feed (&since=ISO ts for newer only)
+    GET /floor?token=FEED_TOKEN          the 3D trading-floor page (dashboard/floor_server.html)
     GET /health                          "ok" (no token), for the host's health check
   FEED_TOKEN is required: without it the data endpoints return 403.
 """
@@ -20,7 +21,7 @@ from datetime import date, datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-from .config import env
+from .config import ROOT, env
 from .live import LIVE, LiveMonitor
 
 
@@ -44,10 +45,17 @@ class FeedHandler(BaseHTTPRequestHandler):
         if url.path == "/state.json":
             f = LIVE / "state.json"
             return self._send(200, f.read_bytes() if f.exists() else b"{}")
+        if url.path == "/floor":  # the 3D trading-floor page, served same-origin so it can poll this feed
+            f = ROOT / "dashboard" / "floor_server.html"
+            return self._send(200, f.read_bytes(), "text/html; charset=utf-8") if f.exists() else self._send(404, b"{}")
         if url.path == "/feed":
             n = min(int(q.get("n", ["200"])[0]), 2000)
+            since = q.get("since", [""])[0]  # ISO timestamp: only events after it
             f = LIVE / f"feed-{date.today()}.jsonl"
-            lines = f.read_text().splitlines()[-n:] if f.exists() else []
+            lines = f.read_text().splitlines() if f.exists() else []
+            if since:
+                lines = [l for l in lines if json.loads(l).get("ts", "") > since]
+            lines = lines[-n:]
             return self._send(200, ("[" + ",".join(lines) + "]").encode())
         self._send(404, b'{"error": "not found"}')
 

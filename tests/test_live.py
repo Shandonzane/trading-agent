@@ -48,6 +48,11 @@ def test_feed_server_requires_token(tmp_path, monkeypatch):
     base = f"http://127.0.0.1:{httpd.server_port}"
     assert urllib.request.urlopen(base + "/health").read() == b"ok"
     assert json.loads(urllib.request.urlopen(base + "/state.json?token=secret").read())["equity"] == 20000
+    with open(tmp_path / f"feed-{__import__('datetime').date.today()}.jsonl", "w") as f:
+        f.write(json.dumps({"ts": "2026-01-01T10:00:00+00:00", "kind": "a"}) + "\n")
+        f.write(json.dumps({"ts": "2026-01-01T10:01:00+00:00", "kind": "b"}) + "\n")
+    newer = json.loads(urllib.request.urlopen(base + "/feed?token=secret&since=2026-01-01T10:00:00%2B00:00").read())
+    assert [e["kind"] for e in newer] == ["b"]
     try:
         urllib.request.urlopen(base + "/state.json?token=wrong")
         assert False, "should be forbidden"
