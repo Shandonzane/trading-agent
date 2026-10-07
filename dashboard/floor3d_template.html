@@ -18,11 +18,27 @@ body { background:var(--bg); color:var(--fg); font-family:var(--body); font-size
 #scene.pointing { cursor:pointer; }
 .scan { position:absolute; inset:0; pointer-events:none;
         background:repeating-linear-gradient(0deg, rgba(0,229,255,.035) 0 1px, transparent 1px 3px); mix-blend-mode:screen; }
-.frame { position:absolute; inset:10px; pointer-events:none; }
+.frame { position:absolute; inset:36px 10px 10px; pointer-events:none; }
+.tape { position:absolute; left:0; right:0; top:0; height:28px; overflow:hidden; background:rgba(0,12,22,.82); border-bottom:1px solid var(--line);
+        font-family:var(--mono); font-size:13px; letter-spacing:.06em; white-space:nowrap; pointer-events:none; z-index:1; color:var(--muted); }
+.tape-in { display:inline-flex; gap:30px; padding-top:6px; padding-left:16px; animation:tape 80s linear infinite; }
+.tape-in b { font-weight:400; color:var(--fg); } .tape-in i { font-style:normal; }
+.tape-in .st { color:var(--up); } .tape-in .st.idle { color:var(--muted); } .tape-in .halt { color:var(--down); }
+@keyframes tape { to { transform:translateX(-50%); } }
+.chip.on { border-color:currentColor; background:rgba(0,229,255,.18); }
+.detail a { color:var(--cyan); }
+a.tag { text-decoration:none; pointer-events:auto; color:var(--cyan); border-color:var(--cyan); background:rgba(0,229,255,.06); }
+.tokenbox { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:min(420px, calc(100% - 32px)); background:rgba(2,12,22,.94);
+            border:1px solid var(--cyan); padding:18px; display:grid; gap:10px; font-family:var(--mono); font-size:13px; z-index:2; }
+.tokenbox[hidden] { display:none; }
+.tokenbox h2 { font-family:var(--display); font-size:15px; letter-spacing:.2em; color:var(--cyan); margin:0; }
+.tokenbox input { font-family:var(--mono); font-size:14px; background:rgba(0,30,45,.6); border:1px solid var(--line); color:var(--fg); padding:8px; }
+.tokenbox button { font-family:var(--mono); letter-spacing:.14em; color:var(--bg); background:var(--cyan); border:0; padding:8px; cursor:pointer; }
+.tokenbox .err { color:var(--down); }
 .frame i { position:absolute; width:26px; height:26px; border:1px solid var(--cyan); opacity:.75; filter:drop-shadow(0 0 4px var(--cyan)); }
 .frame i:nth-child(1) { left:0; top:0; border-right:0; border-bottom:0; } .frame i:nth-child(2) { right:0; top:0; border-left:0; border-bottom:0; }
 .frame i:nth-child(3) { left:0; bottom:0; border-right:0; border-top:0; } .frame i:nth-child(4) { right:0; bottom:0; border-left:0; border-top:0; }
-.hud { position:absolute; inset:0; pointer-events:none; padding-inline:28px; padding-block:24px; display:grid;
+.hud { position:absolute; inset:0; pointer-events:none; padding-inline:28px; padding-block:42px 24px; display:grid;
        grid-template-columns:1fr auto; grid-template-rows:auto 1fr auto; gap:12px; }
 .hud > * { min-width:0; }
 .brand { display:flex; gap:12px; align-items:center; }
@@ -101,13 +117,13 @@ main { max-width:1180px; margin:0 auto; padding-inline:16px; padding-block:22px 
 .log p { margin:0 0 8px; }
 .foot { font-family:var(--mono); color:var(--muted); font-size:12px; letter-spacing:.06em; }
 @media (max-width:640px) {
-  .view { height:72vh; } .hud { padding-inline:18px; padding-block:18px; grid-template-columns:1fr; grid-template-rows:auto auto 1fr auto auto; gap:8px; }
+  .view { height:72vh; } .hud { padding-inline:18px; padding-block:38px 18px; grid-template-columns:1fr; grid-template-rows:auto auto 1fr auto auto; gap:8px; }
   .tags { grid-column:1; grid-row:2; justify-self:start; } .gauge { grid-column:1; grid-row:4; }
   .dock { grid-column:1; grid-row:5; justify-self:stretch; justify-items:start; } .chips { max-width:none; justify-content:flex-start; }
   .gauge svg { width:72px; height:72px; } .readout b { font-size:16px; } .brand svg { width:34px; height:34px; }
   h1 { letter-spacing:.2em; } .readout span { white-space:nowrap; } .detail canvas.tall { height:300px; } .toast { white-space:normal; text-align:center; width:90%; }
 }
-@media (prefers-reduced-motion: reduce) { .spin { animation:none; } }
+@media (prefers-reduced-motion: reduce) { .spin { animation:none; } .tape-in { animation:none; } }
 </style>
 
 <div class="view">
@@ -115,6 +131,7 @@ main { max-width:1180px; margin:0 auto; padding-inline:16px; padding-block:22px 
   <div class="scan"></div>
   <div class="frame"><i></i><i></i><i></i><i></i></div>
   <div class="toast" id="toast"></div>
+  <div class="tape" aria-label="Live ticker tape"><div class="tape-in" id="tapeIn"></div></div>
   <div class="hud">
     <div class="brand">
       <svg viewBox="0 0 100 100" aria-hidden="true">
@@ -125,7 +142,7 @@ main { max-width:1180px; margin:0 auto; padding-inline:16px; padding-block:22px 
       </svg>
       <div><h1>TRADING FLOOR</h1><div class="sys">SYS <b>ONLINE</b> · LVL 88 · <span id="clock">--:--:--</span></div></div>
     </div>
-    <div class="tags"><span class="tag">PAPER MONEY</span><span class="tag live off" id="liveTag">SNAPSHOT</span></div>
+    <div class="tags"><span class="tag">PAPER MONEY</span><span class="tag live off" id="liveTag">SNAPSHOT</span><a class="tag" id="liveFloorLink" hidden target="_blank" rel="noopener">OPEN LIVE FLOOR ↗</a></div>
     <div class="gauge">
       <svg viewBox="0 0 100 100" aria-hidden="true">
         <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(0,229,255,.15)" stroke-width="6"/>
@@ -138,6 +155,7 @@ main { max-width:1180px; margin:0 auto; padding-inline:16px; padding-block:22px 
       <div class="readout">
         <span>CREW P&amp;L</span><b id="hudPnl">$0</b>
         <span>AGENTS <span id="hudCount">0</span> · BENCHED <span id="hudBench">0</span> · POSITIONS <span id="hudPos">0</span></span>
+        <span id="hudLive">LIVE FEED OFF</span>
         <span id="hudMkt">MARKET --</span>
       </div>
     </div>
@@ -149,6 +167,13 @@ main { max-width:1180px; margin:0 auto; padding-inline:16px; padding-block:22px 
       <div class="zoom"><button type="button" id="zin" aria-label="Zoom in">+</button><button type="button" id="zout" aria-label="Zoom out">−</button><button type="button" id="zreset" aria-label="Reset view" style="width:auto;padding-inline:8px;font-size:11px">RESET</button></div>
     </div>
   </div>
+  <form class="tokenbox" id="tokenBox" hidden>
+    <h2>FEED TOKEN</h2>
+    <span class="muted">Paste the FEED_TOKEN from the Railway service's variables. It's saved in this browser only.</span>
+    <span class="err" id="tokenErr"></span>
+    <input id="tokenIn" type="password" autocomplete="off" aria-label="Feed token">
+    <button type="submit">CONNECT</button>
+  </form>
   <section class="detail" id="detail" hidden aria-live="polite">
     <header><div><h2 id="dSym">—</h2><div class="who" id="dWho"></div></div><button type="button" class="close" id="dClose">CLOSE ✕</button></header>
     <canvas id="dChart"></canvas>
@@ -162,7 +187,7 @@ main { max-width:1180px; margin:0 auto; padding-inline:16px; padding-block:22px 
     <section class="log"><h2>HOW IT WORKS</h2>
       <p>Only strategies that passed their backtest and were approved get a desk. The others wander the floor as benched robots until they qualify.</p>
       <p>Each trader's scanning eye follows its paper profit and loss: orange when flat, green when up, red when down. HP counts down toward the 3% daily loss kill switch.</p>
-      <p>Tap any screen in the room (heatmap, news wire, trends, breakdown, strategies, ticker panels) to open it full size. Tap the patrol drone for a surprise. Scroll, pinch or use + and − to zoom; drag to look around.</p>
+      <p>Tap any screen in the room (heatmap, news wire, trends, breakdown, strategies, ticker panels) to open it full size. Tap the patrol drone for a surprise. During market hours the paper account's live monitor streams 1-minute prices, fills and news, and this page checks it every 15 seconds (about 1 to 2 minutes behind the market). Scroll, pinch or use + and − to zoom; drag to look around.</p>
       <p class="muted" id="sourceNote"></p>
     </section>
   </div>
@@ -173,6 +198,9 @@ main { max-width:1180px; margin:0 auto; padding-inline:16px; padding-block:22px 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 const SNAPSHOT = /*SNAPSHOT*/null;
+// true in the copy the paper-trading server hosts at /floor; that copy reads the server's own feed endpoints
+const SERVER_MODE = /*SERVERMODE*/false;
+const LIVE_FLOOR_URL = "https://trading-agent-production-3bf2.up.railway.app/floor";
 const KILL_SWITCH = 0.03, DEFAULT_ACCOUNT = 100000;
 
 // ------------------------------------------------------------------ characters
@@ -213,6 +241,50 @@ const MARKET_SIZE = {NVDA:4.5, MSFT:3.9, AAPL:3.6, GOOGL:2.6, AMZN:2.4, META:1.8
 // ------------------------------------------------------------------ data model
 function money(x) { x = Math.round(x); return (x > 0 ? "+" : x < 0 ? "-" : "") + "$" + Math.abs(x).toLocaleString("en-US"); }
 function pct(x, d = 2) { return (x > 0 ? "+" : x < 0 ? "-" : "") + (Math.abs(x) * 100).toFixed(d) + "%"; }
+// live market feed written by the paper-trading live monitor (data/live/state.json + feed-YYYY-MM-DD.jsonl)
+const LIVE_STALE_MS = 3 * 60000, LIVE_COL = "#3d9bff";
+const feed = {state:null, bars:{}, events:[], file:null, offset:0, partial:"", dec:null};
+const toMs = t => new Date(String(t).replace(" ", "T")).getTime();
+function liveFresh() { return !!(feed.state && feed.state.ts && Date.now() - toMs(feed.state.ts) < LIVE_STALE_MS); }
+function etTime(t) { return new Date(typeof t === "number" ? t : toMs(t)).toLocaleTimeString("en-US", {hour:"numeric", minute:"2-digit", timeZone:"America/New_York"}) + " ET"; }
+function livePx(sym) { const p = feed.state && feed.state.prices && feed.state.prices[sym]; return p != null && liveFresh() ? +p : null; }
+// price and day move for a symbol: live price vs yesterday's close when streaming, else the last two daily closes
+function quote(sym) {
+  const c = state.closes[sym] || [], bars = feed.bars[sym] || [], lp = livePx(sym);
+  if (lp != null) { const base = c.length ? c[c.length - 1] : bars.length ? bars[0][1] : null; return {px:lp, ch:base ? lp / base - 1 : 0, live:true}; }
+  if (c.length > 1) return {px:c[c.length - 1], ch:c[c.length - 1] / c[c.length - 2] - 1, live:false};
+  if (c.length) return {px:c[0], ch:0, live:false};
+  return null;
+}
+const clean = v => String(v ?? "").replace(/^[A-Za-z]+\./, "").toUpperCase();
+function liveItems() {
+  const s = feed.state; if (!s) return [];
+  const out = (s.news || []).map(n => ({ts:n.t, kind:"NEWS", text:`${n.headline}${n.symbols && n.symbols.length ? " · " + n.symbols.slice(0, 4).join(" ") : ""}${n.source ? " · " + n.source : ""}`, url:n.url}));
+  (s.fills || []).forEach(f => out.push({ts:f.t, kind:"FILL", text:`LIVE ${clean(f.event)} ${clean(f.side)} ${f.filled_qty ?? f.qty}${f.qty != null ? "/" + f.qty : ""} ${f.symbol}${f.price != null ? " @ $" + Number(f.price).toFixed(2) : ""}`}));
+  feed.events.filter(e => e.kind === "halt" || e.kind === "error").forEach(e => out.push({ts:e.ts, kind:"RISK", text:e.kind === "halt" ? `KILL SWITCH: ${e.reason || "halted"}` : `LIVE MONITOR ERROR: ${e.error || e.message || ""}`}));
+  return out.sort((a, b) => toMs(b.ts) - toMs(a.ts));
+}
+function liveFocus() {
+  const held = feed.state && (feed.state.positions || []).map(p => p.symbol).find(s => (feed.bars[s] || []).length > 1);
+  return held || ((feed.bars.SPY || []).length > 1 ? "SPY" : Object.keys(feed.bars).find(s => feed.bars[s].length > 1) || "SPY");
+}
+const seenEvents = new Set();
+function ingestEvent(e) {
+  if (!e || typeof e !== "object") return;
+  if (e.kind === "bar" && e.symbol && e.c != null) {
+    const t = toMs(e.t), arr = feed.bars[e.symbol] ||= [];
+    if (arr.length && arr[arr.length - 1][0] === t) arr[arr.length - 1][1] = +e.c;
+    else if (!arr.length || t > arr[arr.length - 1][0]) arr.push([t, +e.c]);
+    else { const i = arr.findIndex(b => b[0] >= t); if (i >= 0 && arr[i][0] !== t) arr.splice(i, 0, [t, +e.c]); }   // a late bar from an overlapping fetch
+  } else if (["halt", "error", "start", "stop"].includes(e.kind)) {
+    const k = e.ts + e.kind; if (seenEvents.has(k)) return; seenEvents.add(k);
+    feed.events.unshift(e); feed.events.sort((a, b) => toMs(b.ts) - toMs(a.ts)); feed.events.length = Math.min(feed.events.length, 30);
+  }
+}
+function ingestFeed(text) {
+  const lines = (feed.partial + text).split("\n"); feed.partial = lines.pop();
+  for (const l of lines) { if (!l.trim()) continue; try { ingestEvent(JSON.parse(l)); } catch (err) {} }
+}
 function sma(c, n) { if (c.length < n) return null; let s = 0; for (let i = c.length - n; i < c.length; i++) s += c[i]; return s / n; }
 function chg(c, n) { return c.length > n ? c[c.length - 1] / c[c.length - 1 - n] - 1 : null; }
 
@@ -227,11 +299,14 @@ function buildCrew(src) {
       if (o.side === "buy") { b.qty += o.qty; b.cost += o.qty * o.price; }
       else if (o.side === "sell" && b.qty) { const avg = b.cost / b.qty, sold = Math.min(o.qty, b.qty); realized += sold * (o.price - avg); invested += sold * avg; b.qty -= sold; b.cost -= sold * avg; }
     }
-    invested += src.lots.filter(mine).reduce((a, l) => a + l.qty * l.entry_price, 0);
+    // invested is summed from positions below so it uses the same entry prices
     const positions = src.lots.filter(mine).map(l => {
-      const series = src.closes[l.symbol] || [], mark = series.length ? series[series.length - 1] : l.entry_price;
-      return {symbol:l.symbol, qty:l.qty, entry:l.entry_price, mark, pnl:l.qty * (mark - l.entry_price), since:l.entry_date};
+      const series = src.closes[l.symbol] || [], lp = livePx(l.symbol), mark = lp != null ? lp : series.length ? series[series.length - 1] : l.entry_price;
+      // while streaming, use the broker's actual fill price when the broker holds exactly this lot
+      const bp = liveFresh() && (feed.state.positions || []).find(p => p.symbol === l.symbol && Math.abs(p.qty - l.qty) < 1e-6), entry = bp ? +bp.avg : l.entry_price;
+      return {symbol:l.symbol, qty:l.qty, entry, mark, pnl:l.qty * (mark - entry), since:l.entry_date};
     });
+    invested += positions.reduce((a, x) => a + x.qty * x.entry, 0);
     const unreal = positions.reduce((a, x) => a + x.pnl, 0), pnl = Math.round(realized + unreal), ret = invested ? pnl / invested : null;
     const decs = src.decisions.filter(mine);
     let words = "FIRST SHIFT. WAITING FOR THE CLOSE.";
@@ -263,10 +338,11 @@ function buildWire(src, crew, bench) {
     const act = d.action.toUpperCase(), kind = act.includes("BUY") ? "BUY" : act.includes("SELL") ? "SELL" : act.includes("BLOCK") ? "RISK" : act.includes("RESIZE") ? "FILL" : "WAIT";
     items.push({ts:d.ts, kind, text:`${names[d.strategy] || d.strategy} ${act} ${d.symbol}${det.qty ? ` · ${det.qty} SH` : ""}${det.price != null ? ` @ $${Number(det.price).toFixed(2)}` : ""} · ${d.reason}`}); });
   src.orders.forEach(o => items.push({ts:o.ts, kind:"FILL", text:`${names[o.strategy] || o.strategy} ${o.side.toUpperCase()} ${o.qty} ${o.symbol} @ $${Number(o.price).toFixed(2)} · ${String(o.status).replace("OrderStatus.", "").toLowerCase()} on ${o.broker}`}));
+  liveItems().forEach(it => items.push(it));
   (src.results || []).forEach(r => items.push({ts:src.generatedAt, kind:r.verdict === "PASS" ? "PASS" : "FAIL", low:true,
     text:`BACKTEST ${names[r.strategy] || r.strategy} on ${r.symbol}: ${r.verdict}${r.cagr != null ? ` · ${pct(r.cagr, 1)}/yr vs hold ${pct(r.bench_cagr || 0, 1)}` : ""}${r.reasons && r.reasons.length ? ` · ${r.reasons[0]}` : ""}`}));
   Object.entries(src.closes).forEach(([s, c]) => { const ch = chg(c, 1); if (ch != null && Math.abs(ch) >= 0.02) items.push({ts:src.generatedAt, kind:"MKT", text:`${s} ${ch > 0 ? "jumps" : "drops"} ${pct(ch)} on the day to $${c[c.length - 1].toFixed(2)}`}); });
-  return items.sort((a, b) => (a.low ? 1 : 0) - (b.low ? 1 : 0) || (b.ts > a.ts ? 1 : b.ts < a.ts ? -1 : 0));
+  return items.sort((a, b) => (a.low ? 1 : 0) - (b.low ? 1 : 0) || ((toMs(b.ts) || 0) - (toMs(a.ts) || 0)));
 }
 
 // ------------------------------------------------------------------ 3D scene
@@ -282,7 +358,7 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color("#02040a");
 scene.fog = new THREE.FogExp2("#030612", 0.0065);
 const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 700);
-scene.add(new THREE.AmbientLight("#4060a0", 0.5));
+scene.add(new THREE.AmbientLight("#4060a0", 0.45)); scene.add(new THREE.HemisphereLight("#cfe4ff", "#2a1606", 0.65));
 const key = new THREE.PointLight(CYAN, 0.7, 30); key.position.set(0, 6.5, 6); scene.add(key);
 
 const darkMat = new THREE.MeshPhongMaterial({color:"#070c16", shininess:60, specular:"#0b2a3a"});
@@ -296,30 +372,61 @@ let seed = 42; const rnd = () => (seed = (seed * 16807) % 2147483647) / 21474836
 
 // --- the room
 const ROOM_W = 44, ROOM_D = 26, WIN_Z = -6.5, CEIL = 7, ZC = 6.5;  // ZC: center of the floor in z
-const floor = add(new THREE.Mesh(new THREE.PlaneGeometry(ROOM_W, ROOM_D), new THREE.MeshPhongMaterial({color:"#03070f", shininess:20, specular:"#06202c"})));
-floor.rotation.x = -Math.PI / 2; floor.position.z = ZC;
-const grid = add(new THREE.GridHelper(ROOM_W, 44, CYAN, "#06303f")); grid.position.set(0, 0.002, ZC); grid.material.transparent = true; grid.material.opacity = 0.28;
-for (let x = -ROOM_W / 2; x <= ROOM_W / 2; x += 3.4) add(line([[x, 0, WIN_Z], [x, CEIL, WIN_Z]], CYAN, 0.5));
-add(line([[-ROOM_W / 2, 0.02, WIN_Z], [ROOM_W / 2, 0.02, WIN_Z]], CYAN, 0.9));
-add(line([[-ROOM_W / 2, CEIL, WIN_Z], [ROOM_W / 2, CEIL, WIN_Z]], CYAN, 0.6));
-add(line([[-ROOM_W / 2, 2.4, WIN_Z + 0.02], [ROOM_W / 2, 2.4, WIN_Z + 0.02]], CYAN, 0.25));
-const ceiling = add(new THREE.Mesh(new THREE.PlaneGeometry(ROOM_W, ROOM_D), new THREE.MeshBasicMaterial({color:"#02050b"})));
-ceiling.rotation.x = Math.PI / 2; ceiling.position.set(0, CEIL, ZC);
-for (let z = -5; z <= 18; z += 2.6) { const beam = neonBox(ROOM_W, 0.25, 0.35, ORANGE, 0.28); beam.position.set(0, CEIL - 0.15, z); add(beam); }
-add(new THREE.Mesh(new THREE.PlaneGeometry(ROOM_W, CEIL), new THREE.MeshBasicMaterial({color:"#0a4a66", transparent:true, opacity:0.05, depthWrite:false}))).position.set(0, 3.5, WIN_Z);
-// side walls with neon seams so the floor reads as a room, not a stage
-for (const sx of [-1, 1]) {
-  const wall = add(new THREE.Mesh(new THREE.PlaneGeometry(ROOM_D, CEIL), new THREE.MeshBasicMaterial({color:"#03070f", side:THREE.DoubleSide})));
-  wall.position.set(sx * ROOM_W / 2, CEIL / 2, ZC); wall.rotation.y = sx * -Math.PI / 2;
-  for (let z = WIN_Z; z <= ZC + ROOM_D / 2; z += 3.4) add(line([[sx * ROOM_W / 2 * 0.999, 0, z], [sx * ROOM_W / 2 * 0.999, CEIL, z]], sx > 0 ? ORANGE : CYAN, 0.3));
-  add(line([[sx * ROOM_W / 2 * 0.999, 2.4, WIN_Z], [sx * ROOM_W / 2 * 0.999, 2.4, ZC + ROOM_D / 2]], sx > 0 ? ORANGE : CYAN, 0.35));
+// colosseum: a round floor with three tiers of desks, open at the back toward the video wall
+const AC = {x:0, z:1}, R0 = 7.5, TIER = 3.2, TIER_H = 0.8, R_OUT = R0 + 3 * TIER, WALL_H = 3.0;
+const OPEN0 = 240, OPEN_LEN = 240;  // tiers run from 240° round to 120° (cylinder angles; 180° = the window)
+const DEG = Math.PI / 180, DOOR_A = 90, DOOR_W = 7;  // east door to the clipping room
+const stoneMat = new THREE.MeshLambertMaterial({color:"#0a111c"}), stepMat = new THREE.MeshLambertMaterial({color:"#0d1624"});
+const arcPts = (r, y, a0 = OPEN0, len = OPEN_LEN, n = 64, cx = AC.x, cz = AC.z) => Array.from({length:n + 1}, (_, i) => { const t = (a0 + len * i / n) * DEG; return [cx + r * Math.sin(t), y, cz + r * Math.cos(t)]; });
+const ringFlat = (r0, r1, y, a0, len, mat, cx = AC.x, cz = AC.z) => { const m = add(new THREE.Mesh(new THREE.RingGeometry(r0, r1, 96, 1, (a0 - 90) * DEG, len * DEG), mat)); m.rotation.x = -Math.PI / 2; m.position.set(cx, y, cz); return m; };
+const wallArc = (r, y0, h, a0, len, mat, cx = AC.x, cz = AC.z) => { const m = add(new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, 96, 1, true, a0 * DEG, len * DEG), mat)); m.position.set(cx, y0 + h / 2, cz); return m; };
+const floor = add(new THREE.Mesh(new THREE.CircleGeometry(R0, 96), new THREE.MeshLambertMaterial({color:"#050a14"})));
+floor.rotation.x = -Math.PI / 2; floor.position.set(AC.x, 0, AC.z);
+const grid = add(new THREE.PolarGridHelper(R0, 16, 6, 96, CYAN, "#06303f")); grid.position.set(AC.x, 0.003, AC.z); grid.material.transparent = true; grid.material.opacity = 0.3;
+add(line(arcPts(R0, 0.02, 0, 360, 128), CYAN, 0.9));
+const riserMat = new THREE.MeshLambertMaterial({color:"#070d18", side:THREE.DoubleSide});
+for (let k = 1; k <= 3; k++) {
+  const r0 = R0 + (k - 1) * TIER, r1 = r0 + TIER, y = k * TIER_H;
+  ringFlat(r0, r1, y, OPEN0, OPEN_LEN, k % 2 ? stoneMat : stepMat);
+  wallArc(r0, 0, y, OPEN0, OPEN_LEN, riserMat);
+  add(line(arcPts(r0, y + 0.01), k === 1 ? CYAN : ORANGE, 0.75));
+  add(line(arcPts(r0 + 0.25, y + 0.012), CYAN, 0.2));
+  for (const e of [OPEN0, OPEN0 + OPEN_LEN]) { const t = e * DEG; add(line([[AC.x + r0 * Math.sin(t), y, AC.z + r0 * Math.cos(t)], [AC.x + r1 * Math.sin(t), y, AC.z + r1 * Math.cos(t)]], CYAN, 0.5)); }
 }
-const PILLARS = [[-11, -4], [11, -4], [-15, 3], [15, 3], [-13, 9], [13, 9], [-16, 15], [16, 15]];
-for (const [x, z] of PILLARS) {
-  const p = neonBox(0.8, CEIL, 0.8, CYAN, 0.45); p.position.set(x, CEIL / 2, z); add(p);
-  add(new THREE.Mesh(new THREE.PlaneGeometry(0.08, CEIL - 0.6), glowMat(CYAN, 0.6))).position.set(x, CEIL / 2, z + 0.41);
+// outer wall with colosseum arches, broken by the east door
+const wallMat = new THREE.MeshLambertMaterial({color:"#08101c", side:THREE.DoubleSide}), Y_TOP = 3 * TIER_H;
+wallArc(R_OUT, Y_TOP, WALL_H, OPEN0, (DOOR_A - DOOR_W + 360) - OPEN0, wallMat);
+wallArc(R_OUT, Y_TOP, WALL_H, DOOR_A + DOOR_W, (OPEN0 + OPEN_LEN - 360) - (DOOR_A + DOOR_W), wallMat);
+add(line(arcPts(R_OUT - 0.05, Y_TOP + WALL_H, OPEN0, OPEN_LEN), ORANGE, 0.6));
+function archAt(deg, r, y0, w, h, color, op) {
+  const t = deg * DEG, ux = Math.cos(t), uz = -Math.sin(t), cx = AC.x + r * Math.sin(t), cz = AC.z + r * Math.cos(t);
+  const pts = [[cx - ux * w / 2, y0, cz - uz * w / 2], [cx - ux * w / 2, y0 + h - w / 2, cz - uz * w / 2]];
+  for (let i = 1; i < 12; i++) { const q = Math.PI - Math.PI * i / 12; pts.push([cx + ux * Math.cos(q) * w / 2, y0 + h - w / 2 + Math.sin(q) * w / 2, cz + uz * Math.cos(q) * w / 2]); }
+  pts.push([cx + ux * w / 2, y0 + h - w / 2, cz + uz * w / 2], [cx + ux * w / 2, y0, cz + uz * w / 2]);
+  return add(line(pts, color, op));
 }
-for (let i = 0; i < 7; i++) { const shaft = add(new THREE.Mesh(new THREE.CylinderGeometry(0.6, 2.2, CEIL, 24, 1, true), glowMat(CYAN, 0.02))); shaft.position.set(-12 + i * 4, CEIL / 2, 4 + (i % 2) * 5); }
+for (let d = OPEN0 + 10; d < OPEN0 + OPEN_LEN - 5; d += 15) if (Math.abs(((d - DOOR_A + 540) % 360) - 180) > DOOR_W + 4) archAt(d, R_OUT - 0.08, Y_TOP + 0.3, 1.5, 2.3, CYAN, 0.45);
+archAt(DOOR_A, R_OUT, Y_TOP, 2 * DOOR_W * DEG * R_OUT * 0.9, WALL_H * 0.95, ORANGE, 1);
+const PILLARS = [];
+for (let d = OPEN0 + 2.5; d <= OPEN0 + OPEN_LEN; d += 15) { const t = d * DEG; if (Math.abs(((d - DOOR_A + 540) % 360) - 180) < DOOR_W + 2) continue; PILLARS.push([AC.x + (R_OUT - 0.3) * Math.sin(t), AC.z + (R_OUT - 0.3) * Math.cos(t)]); }
+for (const [x, z] of PILLARS) { const p = neonBox(0.5, WALL_H, 0.5, CYAN, 0.35, stoneMat); p.position.set(x, Y_TOP + WALL_H / 2, z); add(p); }
+// window frame at the open back
+for (let x = -16; x <= 16; x += 3.4) add(line([[x, 0, WIN_Z], [x, CEIL, WIN_Z]], CYAN, 0.35));
+add(line([[-16, CEIL, WIN_Z], [16, CEIL, WIN_Z]], CYAN, 0.6));
+add(new THREE.Mesh(new THREE.PlaneGeometry(32, CEIL), new THREE.MeshBasicMaterial({color:"#0a4a66", transparent:true, opacity:0.05, depthWrite:false}))).position.set(0, 3.5, WIN_Z);
+// corridor through the east door to the clipping room
+const CLIP = {x:AC.x + R_OUT + 12, y:Y_TOP, z:AC.z, r:6.5};
+{
+  const len = CLIP.x - CLIP.r - (AC.x + R_OUT) + 0.6, cx = AC.x + R_OUT + len / 2 - 0.3;
+  const hall = add(new THREE.Mesh(new THREE.BoxGeometry(len, 0.2, 3.2), stepMat)); hall.position.set(cx, Y_TOP - 0.1, AC.z);
+  for (const sz of [-1.6, 1.6]) { add(line([[cx - len / 2, Y_TOP + 0.01, AC.z + sz], [cx + len / 2, Y_TOP + 0.01, AC.z + sz]], ORANGE, 0.8)); const w = add(new THREE.Mesh(new THREE.BoxGeometry(len, 1.4, 0.15), wallMat)); w.position.set(cx, Y_TOP + 0.7, AC.z + sz); }
+  ringFlat(0, CLIP.r, CLIP.y, 0, 360, new THREE.MeshLambertMaterial({color:"#120a06"}), CLIP.x, CLIP.z);
+  add(line(arcPts(CLIP.r, CLIP.y + 0.01, 0, 360, 96, CLIP.x, CLIP.z), ORANGE, 0.9));
+  add(line(arcPts(CLIP.r * 0.6, CLIP.y + 0.012, 0, 360, 64, CLIP.x, CLIP.z), MAGENTA, 0.4));
+  wallArc(CLIP.r, CLIP.y, 2.6, 270 + 14, 360 - 28, wallMat, CLIP.x, CLIP.z);
+  add(line(arcPts(CLIP.r - 0.05, CLIP.y + 2.6, 270 + 14, 360 - 28, 96, CLIP.x, CLIP.z), MAGENTA, 0.6));
+}
+for (let i = 0; i < 6; i++) { const t = (i * 60 + 30) * DEG, shaft = add(new THREE.Mesh(new THREE.CylinderGeometry(0.6, 2.2, CEIL, 24, 1, true), glowMat(CYAN, 0.02))); shaft.position.set(AC.x + 4.5 * Math.sin(t), CEIL / 2, AC.z + 4.5 * Math.cos(t)); }
 // holo-globe off to the right so the video wall owns the center
 const globe = new THREE.Group(); globe.position.set(13.5, 5.2, WIN_Z + 1.4); globe.scale.setScalar(0.55); add(globe);
 globe.add(new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.IcosahedronGeometry(0.9, 2)), lineMat(CYAN, 0.35)));
@@ -373,11 +480,10 @@ function pointAt(tr, d) {
   d = ((d % tr.total) + tr.total) % tr.total; let i = 1; while (i < tr.lens.length - 1 && tr.lens[i] < d) i++;
   const a = tr.pts[i - 1], b = tr.pts[i], f = (d - tr.lens[i - 1]) / ((tr.lens[i] - tr.lens[i - 1]) || 1); return a.clone().lerp(b, f);
 }
-circuit([[-20, 0.01, 16], [-20, 0.01, 2], [-9, 0.01, 2], [-9, 0.01, -6.4], [-9, CEIL, -6.4]], CYAN, 2.2);
-circuit([[20, 0.01, 16], [20, 0.01, 4], [9, 0.01, 4], [9, 0.01, -6.4], [9, CEIL, -6.4]], ORANGE, 1.8);
-circuit([[-22, CEIL - 0.01, 14], [-4, CEIL - 0.01, 14], [-4, CEIL - 0.01, -6.4], [-4, 0, -6.4]], CYAN, 2.6);
-circuit([[22, CEIL - 0.01, 0], [4, CEIL - 0.01, 0], [4, CEIL - 0.01, -6.4], [4, 0, -6.4]], MAGENTA, 2.0);
-circuit([[-22, 0.01, 11.5], [22, 0.01, 11.5]], CYAN, 3.2);
+circuit(arcPts(R0 - 0.4, 0.015, 0, 360, 96), CYAN, 2.2);
+circuit(arcPts(R0 + TIER - 0.2, TIER_H + 0.015, OPEN0, OPEN_LEN), ORANGE, 1.8);
+circuit(arcPts(R0 + 2 * TIER - 0.2, 2 * TIER_H + 0.015, OPEN0 + OPEN_LEN, -OPEN_LEN), CYAN, 2.4);
+circuit([[AC.x + R_OUT - 1, Y_TOP + 0.02, AC.z], [CLIP.x - CLIP.r, Y_TOP + 0.02, AC.z], ...arcPts(CLIP.r - 0.3, Y_TOP + 0.02, 270, 360, 64, CLIP.x, CLIP.z)], MAGENTA, 2.0);
 
 // --- canvases for holo text
 function panelTexture(w, h, draw) {
@@ -442,7 +548,8 @@ function squarify(items, x, y, w, h, out) {
   if (vertical) squarify(rest, x + thick, y, w - thick, h, out); else squarify(rest, x, y + thick, w, h - thick, out);
 }
 function heatItems() {
-  return Object.entries(state.closes).filter(([s, c]) => c.length > 1 && MARKET_SIZE[s]).map(([s, c]) => ({s, v:MARKET_SIZE[s], ch:chg(c, 1), px:c[c.length - 1]})).sort((a, b) => b.v - a.v);
+  const syms = [...new Set([...Object.keys(state.closes), ...Object.keys(feed.bars)])].filter(s => MARKET_SIZE[s]);
+  return syms.map(s => ({s, q:quote(s)})).filter(x => x.q).map(({s, q}) => ({s, v:MARKET_SIZE[s], ch:q.ch, px:q.px, live:q.live})).sort((a, b) => b.v - a.v);
 }
 function heatColor(ch) {
   const k = Math.min(1, Math.abs(ch) / 0.03);
@@ -464,7 +571,7 @@ function heatBoxes(g, x0, y0, w, h, big) {
   g.textAlign = "left";
 }
 function heatmapDraw() { return (g, W, H) => { screenHeader(g, W, H, "MARKET HEATMAP", "DAY MOVE · AREA ≈ MARKET SIZE", ORANGE); heatBoxes(g, 24, 68, W - 48, H - 92, false); }; }
-const KIND_COLOR = {BUY:UP, SELL:DOWN, FILL:CYAN, RISK:ORANGE, PASS:UP, FAIL:DOWN, MKT:GOLD, WAIT:"#6f93a8"};
+const KIND_COLOR = {BUY:UP, SELL:DOWN, FILL:CYAN, RISK:ORANGE, PASS:UP, FAIL:DOWN, MKT:GOLD, WAIT:"#6f93a8", NEWS:"#3d9bff"};
 function wireItems() { return state.wire.length ? state.wire : [{kind:"WAIT", ts:"", text:"Quiet floor. The agents run after each market close."}]; }
 function newsDraw(off = 0) {
   return (g, W, H) => {
@@ -482,8 +589,8 @@ function newsDraw(off = 0) {
 }
 function trendRows() {
   return Object.entries(state.closes).filter(([, c]) => c.length > 2).map(([s, c]) => {
-    const px = c[c.length - 1], s20 = sma(c, 20), s50 = sma(c, 50), s200 = sma(c, 200);
-    return {s, px, d1:chg(c, 1), d5:chg(c, 5), d20:chg(c, 20), s20, s50, s200, hi52: Math.max(...c.slice(-250))};
+    const q = quote(s), px = q.px, s20 = sma(c, 20), s50 = sma(c, 50), s200 = sma(c, 200), ref = n => c.length > n ? (q.live ? c[c.length - n] : c[c.length - 1 - n]) : null;
+    return {s, px, live:q.live, d1:q.ch, d5:ref(5) ? px / ref(5) - 1 : null, d20:ref(20) ? px / ref(20) - 1 : null, s20, s50, s200, hi52: Math.max(px, ...c.slice(-250))};
   }).sort((a, b) => (b.d20 ?? -9) - (a.d20 ?? -9));
 }
 function trendsDraw() {
@@ -506,12 +613,17 @@ function portfolio() {
   const invested = pos.reduce((s, p) => s + p.value, 0), realized = state.crew.reduce((s, a) => s + a.realized, 0);
   const cost = state.crew.reduce((s, a) => s + a.positions.reduce((q, p) => q + p.qty * p.entry, 0), 0);
   const base = (state.src.account && state.src.account.account_size) || DEFAULT_ACCOUNT, cash = Math.max(0, base - cost + realized);
+  if (liveFresh()) {
+    const s = feed.state, owner = Object.fromEntries(pos.map(p => [p.symbol, p.who]));
+    const lpos = (s.positions || []).map(p => ({symbol:p.symbol, qty:p.qty, entry:p.avg, mark:p.price, pnl:p.unrealized, value:p.value, who:owner[p.symbol] || "PORTFOLIO", since:"broker"}));
+    return {pos:lpos, invested:lpos.reduce((a, p) => a + p.value, 0), realized, cash:s.cash, equity:s.equity, totalPnl:lpos.reduce((a, p) => a + p.pnl, 0), day:s.day_pl, live:true};
+  }
   return {pos, invested, realized, cash, equity:cash + invested, totalPnl:state.crew.reduce((s, a) => s + a.pnl, 0)};
 }
 function breakdownDraw(big) {
   return (g, W, H) => {
-    screenHeader(g, W, H, "PORTFOLIO BREAKDOWN", "PAPER ACCOUNT · EST.", MAGENTA);
     const pf = portfolio(), eq = pf.equity || 1;
+    screenHeader(g, W, H, "PORTFOLIO BREAKDOWN", pf.live ? "BROKER · LIVE" : "PAPER ACCOUNT · EST.", MAGENTA);
     const slices = [...pf.pos.map(p => ({label:p.symbol, v:p.value, col:p.pnl >= 0 ? UP : DOWN})), {label:"CASH", v:pf.cash, col:"rgba(111,147,168,.8)"}];
     const cx = big ? 150 : 120, cy = (H + 50) / 2, R = Math.min(big ? 110 : 80, (H - 90) / 2), r = R * 0.62;
     let a0 = -Math.PI / 2;
@@ -521,7 +633,7 @@ function breakdownDraw(big) {
     const lx = cx + R + 30; let y = 96; g.font = MONO(big ? 20 : 17);
     g.fillStyle = "#6f93a8"; g.fillText(`INVESTED ${Math.round(pf.invested / eq * 100)}%  ·  CASH ${Math.round(pf.cash / eq * 100)}%`, lx, y); y += 30;
     slices.forEach(s => { g.fillStyle = s.col; g.fillRect(lx, y - 14, 14, 14); g.fillStyle = "#dff8ff"; g.fillText(`${s.label}  $${Math.round(s.v).toLocaleString("en-US")}  ${Math.round(s.v / eq * 100)}%`, lx + 24, y); y += 28; });
-    g.fillStyle = pf.totalPnl > 0 ? UP : pf.totalPnl < 0 ? DOWN : "#dff8ff"; g.fillText(`OPEN P&L ${money(pf.totalPnl)}   BANKED ${money(pf.realized)}`, lx, y + 6);
+    g.fillStyle = pf.totalPnl > 0 ? UP : pf.totalPnl < 0 ? DOWN : "#dff8ff"; g.fillText(pf.live ? `TODAY ${money(pf.day)}   OPEN ${money(pf.totalPnl)}` : `OPEN P&L ${money(pf.totalPnl)}   BANKED ${money(pf.realized)}`, lx, y + 6);
   };
 }
 function ruleText(c) {
@@ -550,14 +662,30 @@ function strategyDraw(idx = 0) {
     g.font = MONO(14); g.fillStyle = "#6f93a8"; g.fillText(`${(idx % list.length) + 1} / ${list.length}  ·  TAP TO OPEN ALL`, 24, H - 16);
   };
 }
+function liveDraw() {
+  return (g, W, H) => {
+    const s = feed.state, fresh = liveFresh();
+    screenHeader(g, W, H, "LIVE TAPE", s ? (fresh ? "● STREAMING · " : "IDLE · LAST ") + etTime(s.ts) : "NO LIVE FEED YET", LIVE_COL);
+    if (!s) { g.font = MONO(18); g.fillStyle = "#6f93a8"; wrap(g, "Starts when the paper account's live monitor runs during market hours.", W - 48).forEach((l, i) => g.fillText(l, 24, 100 + i * 24)); return; }
+    g.font = FONT(32, 700); g.fillStyle = s.day_pl > 0 ? UP : s.day_pl < 0 ? DOWN : "#dff8ff"; g.fillText(`${money(s.day_pl)} TODAY`, 24, 102);
+    g.font = MONO(18); g.fillStyle = "#9fc3d6"; g.fillText(`EQUITY $${Math.round(s.equity).toLocaleString("en-US")} · ${pct(s.day_pl_pct || 0)}${s.halted ? " · HALTED" : ""}`, 24, 130);
+    const sym = liveFocus(), b = (feed.bars[sym] || []).map(x => x[1]);
+    if (b.length > 1) { g.font = MONO(15); g.fillStyle = "#6f93a8"; g.fillText(`${sym} · 1-MIN · ${b.length} BARS`, 24, 156); chartLines(g, b, 24, 166, W - 48, H - 166 - 66, null); }
+    else { g.font = MONO(16); g.fillStyle = "#6f93a8"; g.fillText("WAITING FOR 1-MINUTE BARS", 24, 170); }
+    const ev = liveItems().slice(0, 2); g.font = MONO(15);
+    ev.forEach((e, i) => { g.fillStyle = KIND_COLOR[e.kind] || "#dff8ff"; g.fillText(wrap(g, `${e.kind} · ${e.text}`, W - 48)[0], 24, H - 40 + i * 20); });
+    if (!ev.length) { g.fillStyle = "#6f93a8"; g.fillText("NO FILLS OR HEADLINES YET TODAY", 24, H - 30); }
+  };
+}
 function tickerDraw(sym, a, held) {
   return (g, W, H) => {
     g.fillStyle = "rgba(0,16,28,.5)"; g.fillRect(0, 0, W, H); brackets(g, W, H, held ? a.neon : "#2f7d96");
     const c = (state.closes[sym] || []).slice(-60), pos = a.positions.find(p => p.symbol === sym);
     g.font = FONT(30, 700); g.fillStyle = "#dff8ff"; g.fillText(sym, 22, 44);
-    if (c.length > 1) {
-      const last = c[c.length - 1], ch = last / c[c.length - 2] - 1;
-      g.font = MONO(24); g.fillStyle = "#9fc3d6"; g.fillText(last.toFixed(2), 22, 76);
+    const q = quote(sym);
+    if (c.length > 1 && q) {
+      const last = q.px, ch = q.ch;
+      g.font = MONO(24); g.fillStyle = "#9fc3d6"; g.fillText(last.toFixed(2) + (q.live ? " ●" : ""), 22, 76);
       g.fillStyle = ch >= 0 ? UP : DOWN; g.fillText((ch >= 0 ? "▲ " : "▼ ") + Math.abs(ch * 100).toFixed(2) + "%", 130, 76);
       chartLines(g, c, 22, 96, W - 44, H - 140, pos ? pos.entry : null);
     }
@@ -599,39 +727,63 @@ function miniChartDraw(sym) {
 }
 
 // ------------------------------------------------------------------ robots
-const armor = new THREE.MeshPhongMaterial({color:"#0b0b0d", shininess:110, specular:"#6a4020"});
-const benchArmor = new THREE.MeshPhongMaterial({color:"#111318", shininess:60, specular:"#2a2a30"});
-function makeRobot(color, dim) {
-  const bot = new THREE.Group(); bot.scale.setScalar(1.4);
-  const mat = dim ? benchArmor : armor, eo = dim ? 0.4 : 0.85;
-  const plate = (w, h, d, x, y, z, parent = bot, edge = eo) => { const g = new THREE.BoxGeometry(w, h, d), m = new THREE.Mesh(g, mat); m.position.set(x, y, z); m.add(glowEdges(g, color, edge)); parent.add(m); return m; };
-  plate(0.5, 0.12, 0.34, 0, 0.42, 0);
-  const thr = [];
+const EYE_SWAY = 0.02;
+const walleBody = new THREE.MeshLambertMaterial({color:"#c8641c"}), walleDark = new THREE.MeshLambertMaterial({color:"#1c1c20"}), walleGrey = new THREE.MeshLambertMaterial({color:"#55575c"});
+const eveBody = new THREE.MeshLambertMaterial({color:"#c9ccd2"}), eveVisor = new THREE.MeshLambertMaterial({color:"#06070a"});
+function makeRobot(color, dim) { return dim ? makeEve(color) : makeWalle(color); }
+function mesh(geo, mat, parent, x = 0, y = 0, z = 0) { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); parent.add(m); return m; }
+function makeWalle(color) {
+  const bot = new THREE.Group(); bot.scale.setScalar(2.0);
   for (const sx of [-1, 1]) {
-    add(new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.11, 0.1, 6), mat), bot).position.set(sx * 0.17, 0.32, 0);
-    const flame = add(new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.3, 12, 1, true), glowMat(color, dim ? 0.3 : 0.55)), bot); flame.position.set(sx * 0.17, 0.12, 0); flame.rotation.x = Math.PI; thr.push(flame);
+    mesh(new THREE.BoxGeometry(0.13, 0.2, 0.5), walleDark, bot, sx * 0.27, 0.1, 0);
+    for (const wz of [-0.18, 0, 0.18]) mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.14, 14), walleGrey, bot, sx * 0.27, 0.1, wz).rotation.z = Math.PI / 2;
   }
-  plate(0.12, 0.22, 0.12, 0, 0.58, 0, bot, eo * 0.6);
-  const torso = plate(0.56, 0.42, 0.34, 0, 0.9, 0);
-  plate(0.62, 0.08, 0.38, 0, 1.12, 0, bot, eo * 0.7);
-  for (let k = 0; k < 3; k++) add(new THREE.Mesh(new THREE.PlaneGeometry(0.24, 0.016), glowMat(color, dim ? 0.4 : 0.9)), torso).position.set(0.04, 0.06 - k * 0.06, 0.171);
-  const headG = new THREE.Group(); headG.position.y = 1.36; bot.add(headG);
-  plate(0.12, 0.08, 0.12, 0, -0.1, 0, headG, eo * 0.5); plate(0.4, 0.24, 0.32, 0, 0.06, 0, headG); plate(0.44, 0.04, 0.36, 0, 0.2, 0, headG, eo * 0.7);
-  add(new THREE.Mesh(new THREE.PlaneGeometry(0.32, 0.05), new THREE.MeshBasicMaterial({color:"#1a0a02"})), headG).position.set(0, 0.07, 0.161);
-  const eye = add(new THREE.Mesh(new THREE.PlaneGeometry(0.07, 0.04), glowMat(color)), headG); eye.position.set(0, 0.07, 0.163);
-  plate(0.03, 0.2, 0.03, 0.14, 0.3, -0.05, headG, eo * 0.5);
-  const tip = add(new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 8), glowMat(color)), headG); tip.position.set(0.14, 0.42, -0.05);
+  mesh(new THREE.BoxGeometry(0.46, 0.42, 0.4), walleBody, bot, 0, 0.42, 0);
+  const torso = new THREE.Group(); torso.position.set(0, 0.42, 0.03); bot.add(torso);
+  mesh(new THREE.BoxGeometry(0.36, 0.26, 0.02), walleDark, torso, 0.03, 0.02, 0.165);
+  for (let k = 0; k < 3; k++) mesh(new THREE.PlaneGeometry(0.2, 0.018), glowMat(color, 0.9), torso, 0.06, 0.08 - k * 0.045, 0.177);
+  const tip = mesh(new THREE.SphereGeometry(0.025, 8, 8), glowMat(color), bot, 0.16, 0.645, 0.12);
+  mesh(new THREE.CylinderGeometry(0.03, 0.04, 0.2, 10), walleGrey, bot, 0, 0.72, -0.03);
+  const headG = new THREE.Group(); headG.position.set(0, 0.86, 0); bot.add(headG);
+  const eyeRig = new THREE.Group(); eyeRig.position.set(-0.1, 0, 0.08); headG.add(eyeRig);
+  for (const sx of [-1, 1]) {
+    const lens = mesh(new THREE.CylinderGeometry(0.085, 0.1, 0.16, 18), walleGrey, headG, sx * 0.1, 0, 0); lens.rotation.x = Math.PI / 2; lens.rotation.z = sx * 0.12;
+    mesh(new THREE.CircleGeometry(0.07, 18), walleDark, headG, sx * 0.1, 0, 0.081);
+  }
+  const eye = mesh(new THREE.CircleGeometry(0.03, 14), glowMat(color), eyeRig, 0, 0, 0.003); mesh(new THREE.CircleGeometry(0.03, 14), eye.material, eye, 0.2, 0, 0);
   const arms = [];
   for (const sx of [-1, 1]) {
-    const sh = new THREE.Group(); sh.position.set(sx * 0.36, 1.08, 0); bot.add(sh);
-    add(new THREE.Mesh(new THREE.SphereGeometry(0.065, 12, 10), mat), sh); plate(0.09, 0.24, 0.09, 0, -0.14, 0, sh, eo * 0.7);
-    const el = new THREE.Group(); el.position.y = -0.28; sh.add(el);
-    add(new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.1, 10), glowMat(color, dim ? 0.4 : 0.8)), el).rotation.z = Math.PI / 2;
-    plate(0.08, 0.22, 0.08, 0, -0.12, 0, el, eo * 0.7);
-    for (const f of [-1, 1]) plate(0.02, 0.07, 0.03, f * 0.025, -0.26, 0, el, eo);
+    const sh = new THREE.Group(); sh.position.set(sx * 0.27, 0.48, 0.05); bot.add(sh);
+    mesh(new THREE.BoxGeometry(0.06, 0.06, 0.06), walleGrey, sh);
+    mesh(new THREE.BoxGeometry(0.06, 0.06, 0.22), walleGrey, sh, 0, 0, 0.1).rotation.x = 0;
+    const el = new THREE.Group(); el.position.set(0, 0, 0.2); sh.add(el);
+    mesh(new THREE.BoxGeometry(0.05, 0.16, 0.05), walleGrey, el, 0, -0.08, 0);
+    for (const f of [-1, 1]) mesh(new THREE.BoxGeometry(0.02, 0.07, 0.06), walleDark, el, f * 0.03, -0.18, 0);
     arms.push({sh, el});
   }
-  return {bot, headG, arms, eye, thr, tip, torso};
+  return {bot, headG, arms, eye, thr:[], tip, torso};
+}
+function makeEve(color) {
+  const bot = new THREE.Group(); bot.scale.setScalar(2.0);
+  const hover = new THREE.Group(); hover.position.y = 0.12; bot.add(hover);
+  const body = mesh(new THREE.SphereGeometry(0.2, 24, 18), eveBody, hover, 0, 0.62, 0); body.scale.set(1, 1.75, 0.95);
+  const torso = new THREE.Group(); torso.position.set(0.12, 0.55, 0.02); hover.add(torso);
+  const tip = mesh(new THREE.CircleGeometry(0.02, 10), glowMat(color, 0.8), hover, 0, 0.7, 0.193);
+  const headG = new THREE.Group(); headG.position.set(0, 1.08, 0); hover.add(headG);
+  mesh(new THREE.SphereGeometry(0.17, 24, 16), eveBody, headG).scale.set(1.15, 0.85, 1);
+  mesh(new THREE.SphereGeometry(0.15, 24, 16), eveVisor, headG, 0, -0.005, 0.035).scale.set(1.05, 0.66, 1);
+  const eyeRig = new THREE.Group(); eyeRig.position.set(-0.055, 0, 0.183); headG.add(eyeRig);
+  const eye = mesh(new THREE.CircleGeometry(0.03, 16), glowMat("#5cc8ff", 0.95), eyeRig); eye.scale.set(1.2, 0.7, 1);
+  mesh(new THREE.CircleGeometry(0.03, 16), eye.material, eye, 0.11 / 1.2, 0, 0);
+  const arms = [];
+  for (const sx of [-1, 1]) {
+    const sh = new THREE.Group(); sh.position.set(sx * 0.22, 0.86, 0); hover.add(sh);
+    const el = new THREE.Group(); el.position.y = -0.02; sh.add(el);
+    mesh(new THREE.SphereGeometry(0.055, 14, 10), eveBody, el, 0, -0.17, 0).scale.set(1, 3.4, 1);
+    arms.push({sh, el});
+  }
+  const glow = mesh(new THREE.CircleGeometry(0.22, 24), glowMat(color, 0.25), bot, 0, 0.02, 0); glow.rotation.x = -Math.PI / 2;
+  return {bot, headG, arms, eye, thr:[], tip, torso};
 }
 function badgeFor(prop, parent) {
   const badge = panelTexture(128, 128, g => { g.font = "84px sans-serif"; g.textAlign = "center"; g.fillText(EMBLEM[prop] || "⚡", 64, 96); });
@@ -668,17 +820,19 @@ function buildStation(a, x) {
     m.userData = {kind:"ticker", symbol:sym, agent:a, base:m.position.y, tex}; st.add(m); clickables.push(m); panels.push(m);
     st.add(line([[0.35, 1.9, -0.72], [m.position.x, m.position.y - 0.36, m.position.z]], neon, 0.25));
   });
-  const tag = sprite(panelTexture(512, 100, tagDraw(a)), 2.3, 0.45); tag.position.set(0.35, 0.28, 0.75); st.add(tag);
+  const tagTex = panelTexture(512, 100, tagDraw(a)), tag = sprite(tagTex, 2.3, 0.45); tag.position.set(0.35, 0.28, 0.75); st.add(tag);
   const bub = sprite(panelTexture(560, 130, bubbleDraw(a.words, neon)), 3.0, 0.7); bub.position.set(0.35, 3.3, -0.9); st.add(bub);
-  st.userData = {a, ...r, stream, ripple, panels, glow, mood:a.mood, neon};
+  st.userData = {a, ...r, stream, ripple, panels, glow, mood:a.mood, neon, tagTex};
   return st;
 }
 // rows of unassigned desks with flickering monitors, so the floor reads as a trading floor
 const deskMonitors = [];
 function buildDeskRows() {
   const g = new THREE.Group();
-  for (const z of [-3.2, 0.4, 4.0]) for (const x of [-19, -15, -11, 11, 15, 19]) {
-    const d = new THREE.Group(); d.position.set(x, 0, z); g.add(d);
+  for (const [k, n] of [[1, 7], [2, 9], [3, 11]]) for (let j = 0; j < n; j++) {
+    const ang = (OPEN0 + OPEN_LEN * (j + 0.5) / n) * DEG, r = R0 + (k - 0.45) * TIER;
+    if (Math.abs(((ang / DEG - DOOR_A + 540) % 360) - 180) < DOOR_W && k === 3) continue;
+    const d = new THREE.Group(); d.position.set(AC.x + r * Math.sin(ang), k * TIER_H, AC.z + r * Math.cos(ang)); d.rotation.y = ang; g.add(d);
     const top = neonBox(2.6, 0.06, 1.0, CYAN, 0.25); top.position.y = 0.8; d.add(top);
     const base = neonBox(0.5, 0.78, 0.5, CYAN, 0.15); base.position.y = 0.39; d.add(base);
     const mon = neonBox(1.0, 0.6, 0.05, CYAN, 0.35); mon.position.set(0, 1.25, 0.1); d.add(mon);
@@ -706,13 +860,31 @@ bigScreen("news", 2.9, 2.0, -4.5, 4.5, WIN_Z + 1.3, 0.35, newsDraw(0), CYAN);
 bigScreen("trends", 2.9, 2.0, 4.5, 4.5, WIN_Z + 1.3, -0.35, trendsDraw(), UP);
 bigScreen("breakdown", 2.6, 1.6, -13, 4.0, -4.2, 0, breakdownDraw(false), MAGENTA);
 bigScreen("strategy", 2.6, 1.6, 13, 4.0, -4.2, 0, strategyDraw(0), GOLD);
+bigScreen("live", 2.6, 1.8, -8.9, 4.3, WIN_Z + 2.4, 0.6, liveDraw(), LIVE_COL);
 
+// clipping room placeholder: the TikTok clipping work lands here once it ships
+const FIXED_CLICKS = [], CLIPS = (typeof SNAPSHOT !== "undefined" && SNAPSHOT && SNAPSHOT.clipping) || null;
+function clipDraw(title, sub) { return (g, W, H) => { brackets(g, W, H, MAGENTA); g.textAlign = "center"; g.fillStyle = MAGENTA; g.font = FONT(Math.round(W / 9), 700); g.fillText(title, W / 2, H * 0.42); g.font = MONO(Math.round(Math.min(W / 16, W * 1.6 / Math.max(1, sub.length)))); g.fillStyle = "#ffb3ef"; g.fillText(sub, W / 2, H * 0.58); }; }
+{
+  const sign = sprite(panelTexture(640, 150, (g, W, H) => { brackets(g, W, H, ORANGE); g.textAlign = "center"; g.fillStyle = ORANGE; g.font = FONT(56, 700); g.fillText("CLIPPING ROOM →", W / 2, 70); g.font = MONO(24); g.fillText("TAP THE DOOR", W / 2, 118); }), 3.4, 0.8);
+  sign.position.set(AC.x + R_OUT - 0.6, Y_TOP + WALL_H + 0.8, AC.z); add(sign);
+  const door = add(new THREE.Mesh(new THREE.PlaneGeometry(3.2, WALL_H), new THREE.MeshBasicMaterial({transparent:true, opacity:0, depthWrite:false, side:THREE.DoubleSide})));
+  door.position.set(AC.x + R_OUT, Y_TOP + WALL_H / 2, AC.z); door.rotation.y = Math.PI / 2; door.userData = {kind:"door"}; FIXED_CLICKS.push(door);
+  { const g = add(new THREE.Mesh(new THREE.PlaneGeometry(3.0, WALL_H * 0.9), glowMat(ORANGE, 0.08))); g.position.copy(door.position).setY(Y_TOP + WALL_H * 0.45); g.rotation.y = Math.PI / 2; }
+  for (let i = 0; i < 4; i++) {
+    const x = CLIP.x - 3.3 + i * 2.2, z = CLIP.z - 0.6 - Math.abs(i - 1.5) * 0.5;
+    const d = new THREE.Group(); d.position.set(x, CLIP.y, z); add(d);
+    const top = neonBox(1.8, 0.06, 0.8, MAGENTA, 0.5); top.position.y = 0.8; d.add(top);
+    const base = neonBox(0.4, 0.78, 0.4, MAGENTA, 0.25); base.position.y = 0.39; d.add(base);
+    const ph = mesh(new THREE.PlaneGeometry(0.62, 1.1), new THREE.MeshBasicMaterial({map:panelTexture(180, 320, clipDraw("CLIP " + (i + 1), CLIPS && CLIPS.latest && CLIPS.latest[i] ? CLIPS.latest[i].status.replace(/_/g, " ").toUpperCase().slice(0, 12) : "EMPTY")), transparent:true}), d, 0, 1.5, -0.25);
+  }
+  const big = mesh(new THREE.PlaneGeometry(4.2, 2.2), new THREE.MeshBasicMaterial({map:panelTexture(840, 440, clipDraw("CLIP STUDIO", CLIPS ? `${CLIPS.clips_total} CLIPS · ${CLIPS.awaiting_approval} TO APPROVE · ${CLIPS.posted} POSTED · ${(CLIPS.views || 0).toLocaleString()} VIEWS · $${CLIPS.earned_usd || 0}` : "TIKTOK CLIPS · COMING SOON")), transparent:true, side:THREE.DoubleSide}), scene, CLIP.x, CLIP.y + 3.4, CLIP.z - CLIP.r + 1.0);
+}
 let stations = new THREE.Group(); add(stations);
 let wanderers = new THREE.Group(); add(wanderers);
 let builtVersion = -1, span = 6, marketMove = 0;
 const WAYPOINTS = [];
-for (const z of [-4.8, -1.4, 2.2]) for (const x of [-21, -17, -13, -9, 9, 13, 17, 21]) WAYPOINTS.push([x, z]);
-for (const x of [-8, -4, 0, 4, 8]) WAYPOINTS.push([x, 2.4]);
+for (let d = 0; d < 360; d += 30) for (const r of [5.2, 6.6]) { const t = d * DEG, x = AC.x + r * Math.sin(t), z = AC.z + r * Math.cos(t); if (z > WIN_Z + 1) WAYPOINTS.push([x, z]); }
 function buildWanderer(b, i) {
   const r = makeRobot(ORANGE, true); const g = new THREE.Group(); g.add(r.bot);
   const wp = WAYPOINTS[(i * 7 + 3) % WAYPOINTS.length]; g.position.set(wp[0], 0, wp[1]);
@@ -724,7 +896,7 @@ function syncStations() {
   if (builtVersion === dataVersion) return;
   builtVersion = dataVersion;
   for (const grp of [stations, wanderers]) { scene.remove(grp); grp.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); } }); }
-  clickables.length = 0; Object.values(SCREENS).forEach(s => clickables.push(s)); if (drone) clickables.push(drone.hit);
+  clickables.length = 0; Object.values(SCREENS).forEach(s => clickables.push(s)); clickables.push(...FIXED_CLICKS); if (drone) clickables.push(drone.hit);
   stations = new THREE.Group(); add(stations); wanderers = new THREE.Group(); add(wanderers);
   const crew = state.crew.map(a => ({...a, neon:CYAN}));
   const n = crew.length + 1, gap = 4.4; span = n * gap;
@@ -732,9 +904,28 @@ function syncStations() {
   stations.add(buildStation(null, (n - 1 - (n - 1) / 2) * gap));
   state.bench.forEach((b, i) => wanderers.add(buildWanderer(b, i)));
   Object.values(SCREENS).forEach(s => redraw(s.userData.tex));
-  const series = state.closes.SPY ? [state.closes.SPY] : Object.values(state.closes);
-  const moves = series.filter(c => c.length > 1).map(c => c[c.length - 1] / c[c.length - 2] - 1);
+  updateMarketMove();
+}
+
+function updateMarketMove() {
+  const q = quote("SPY");
+  if (q) { marketMove = q.ch; return; }
+  const moves = Object.values(state.closes).filter(c => c.length > 1).map(c => c[c.length - 1] / c[c.length - 2] - 1);
   marketMove = moves.length ? moves.reduce((s, v) => s + v, 0) / moves.length : 0;
+}
+// redraw everything that shows prices or P&L without rebuilding the room (keeps wandering robots where they are)
+function refreshTextures() {
+  const byName = Object.fromEntries(state.crew.map(a => [a.spec.name, a]));
+  stations.children.forEach(st => {
+    const u = st.userData; if (u.empty || !u.a) return;
+    const a = byName[u.a.spec.name]; if (!a) return;
+    u.a = {...a, neon:u.neon}; u.mood = a.mood;
+    const held = a.positions.map(p => p.symbol);
+    u.panels.forEach(p => redraw(p.userData.tex, tickerDraw(p.userData.symbol, u.a, held.includes(p.userData.symbol))));
+    if (u.tagTex) redraw(u.tagTex, tagDraw(u.a));
+  });
+  ["heatmap", "trends", "breakdown", "live"].forEach(k => SCREENS[k] && redraw(SCREENS[k].userData.tex));
+  updateMarketMove();
 }
 
 // ------------------------------------------------------------------ life in the room and the city
@@ -804,7 +995,7 @@ lively.push((t, now, dt) => {
         u.arms.forEach(({sh, el}, k) => { sh.rotation.set(Math.sin(t * 5 + k * Math.PI) * 0.45, 0, (k ? 1 : -1) * 0.12); el.rotation.set(-0.5, 0, 0); }); u.headG.rotation.y *= 0.9; }
     }
     u.bot.position.y = Math.sin(t * 1.8 + u.phase) * 0.03;
-    u.eye.position.x = Math.sin(t * 1.2 + u.phase) * 0.12;
+    u.eye.position.x = Math.sin(t * 1.2 + u.phase) * EYE_SWAY;
     u.thr.forEach(f => { f.scale.y = 0.8 + Math.random() * 0.4; }); u.tip.material.opacity = (Math.floor(t * 1.5 + u.phase) % 2) ? 0.8 : 0.15;
   });
 });
@@ -826,7 +1017,7 @@ lively.push((t, now) => {
 const feedTexs = [];
 for (const [x, z] of PILLARS.slice(2, 6)) {
   const tex = panelTexture(256, 1024, () => {});
-  const m = add(new THREE.Mesh(new THREE.PlaneGeometry(0.7, 2.8), new THREE.MeshBasicMaterial({map:tex, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false}))); m.position.set(x, 2.4, z + 0.42); feedTexs.push(tex);
+  const m = add(new THREE.Mesh(new THREE.PlaneGeometry(0.7, 2.8), new THREE.MeshBasicMaterial({map:tex, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false}))); m.position.set(x, Y_TOP + 1.5, z); m.lookAt(AC.x, Y_TOP + 1.5, AC.z); m.translateZ(0.3); feedTexs.push(tex);
 }
 function feedDraw(off, seedN) {
   return (g, W, H) => {
@@ -897,7 +1088,7 @@ canvas.addEventListener("pointerup", endPtr); canvas.addEventListener("pointerca
 canvas.addEventListener("wheel", e => { e.preventDefault(); zoom = clampZoom(zoom * Math.exp(e.deltaY * 0.0012)); }, {passive:false});
 document.getElementById("zin").onclick = () => { zoom = clampZoom(zoom / 1.25); };
 document.getElementById("zout").onclick = () => { zoom = clampZoom(zoom * 1.25); };
-document.getElementById("zreset").onclick = () => { zoom = 0.9; userAz = 0; userEl = 0; };
+document.getElementById("zreset").onclick = () => { zoom = 0.9; userAz = 0; userEl = 0; camGoal.at.copy(HOME); camGoal.zoom = 1; };
 const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
 function pick(e) {
   const r = canvas.getBoundingClientRect(); ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
@@ -909,22 +1100,23 @@ function hoverPick(e) { const o = pick(e); hovered = o || null; canvas.classList
 function clickPick(e) {
   const o = pick(e); if (!o) return;
   const u = o.userData;
-  if (u.kind === "ufo") popDrone(); else if (u.kind === "ticker") openDetail("ticker", u.symbol); else openDetail(u.kind);
+  if (u.kind === "ufo") popDrone(); else if (u.kind === "door") { camGoal.at.set(CLIP.x - 1, CLIP.y + 0.8, CLIP.z); camGoal.zoom = 0.7; toast("CLIPPING ROOM · RESET TO RETURN"); } else if (u.kind === "ticker") openDetail("ticker", u.symbol); else openDetail(u.kind);
 }
 function resize() { if (!renderer) return; const w = canvas.clientWidth, h = canvas.clientHeight; renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
 
 let curR = null, lastNow = 0;
+const HOME = new THREE.Vector3(0, 1.2, -0.6), camAt = HOME.clone(), camGoal = {at:HOME.clone(), zoom:1};
 function render(now) {
   const t = now / 1000, dt = Math.min(0.05, (now - lastNow) / 1000 || 0.016); lastNow = now;
   syncStations();
   const aspect = camera.aspect || 1.6;
   const fit = (span / 2 + 5.2) / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) / Math.max(aspect, 1.0) + 1;
-  const r = Math.max(aspect < 1 ? 6.5 : 7.5, fit) * zoom;
+  const r = Math.max(aspect < 1 ? 34 : 26, fit * 1.4) * zoom * camGoal.zoom;
   curR = curR == null ? r : curR + (r - curR) * 0.12;
-  const az = userAz + (still ? 0 : Math.sin(t * 0.07) * 0.22), el = 0.2 + userEl + (still ? 0 : Math.sin(t * 0.05) * 0.03);
-  const target = new THREE.Vector3(0, 2.2, -2.4);
+  const az = userAz + (still ? 0 : Math.sin(t * 0.07) * 0.22), el = 0.2 + 30 * DEG + userEl + (still ? 0 : Math.sin(t * 0.05) * 0.03);
+  camAt.lerp(camGoal.at, 0.06); const target = camAt;
   camera.position.set(target.x + curR * Math.sin(az) * Math.cos(el), target.y + 0.4 + curR * Math.sin(el), target.z + curR * Math.cos(az) * Math.cos(el));
-  camera.position.y = Math.min(camera.position.y, CEIL - 0.4); camera.lookAt(target);
+  camera.lookAt(target);
   const tint = new THREE.Color(Math.abs(marketMove) < 0.001 ? CYAN : marketMove > 0 ? UP : DOWN);
   const mix = Math.min(1, Math.abs(marketMove) * 60) * (0.35 + 0.4 * (0.5 + 0.5 * Math.sin(t * 1.4)));
   cityLines.forEach(l => l.material.color.copy(l.userData.base).lerp(tint, mix));
@@ -944,7 +1136,7 @@ function render(now) {
     const step = still ? 0 : [0, -0.35, -0.35, 0, 0.3, 0][Math.floor(t / 1.6 + i) % 6]; u.headG.rotation.y += (step - u.headG.rotation.y) * 0.25;
     u.arms.forEach(({sh, el}, k) => { const tap = still ? 0 : Math.max(0, Math.sin(ph * 1.3 + k * Math.PI)) * 0.12; sh.rotation.set(-0.55 - tap, 0, (k ? 1 : -1) * 0.08); el.rotation.set(-0.9 + tap * 0.5, 0, 0); });
     u.eye.material.color.set(m === "happy" || m === "ecstatic" ? UP : m === "worried" || m === "rattled" ? DOWN : BOT_OR);
-    u.eye.position.x = still ? 0 : Math.sin(t * (m === "rattled" ? 6 : 1.8) + i) * 0.12;
+    u.eye.position.x = still ? 0 : Math.sin(t * (m === "rattled" ? 6 : 1.8) + i) * EYE_SWAY;
     u.thr.forEach(f => { f.scale.y = still ? 1 : 0.8 + Math.random() * 0.4; f.material.opacity = 0.4 + Math.random() * 0.25; });
     u.tip.material.opacity = (Math.floor(t * 2 + i) % 2) ? 1 : 0.2;
     if (!still) { const p = u.stream.geometry.attributes.position; for (let k = 0; k < p.count; k++) { let y = p.getY(k) + 0.02 + (k % 5) * 0.004; if (y > CEIL) y = 0.9; p.setY(k, y); } p.needsUpdate = true;
@@ -957,16 +1149,19 @@ function loop(now) { render(now); requestAnimationFrame(loop); }
 
 // ------------------------------------------------------------------ HUD and detail views
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
-const SCREEN_META = {heatmap:["MARKET HEATMAP", "DAY MOVE · AREA ≈ MARKET SIZE (APPROX.)"], news:["NEWS WIRE", "BUILT FROM THE AGENTS' OWN DECISIONS, FILLS AND VERDICTS"], trends:["TRENDS", "PRICE VS 20 · 50 · 200 DAY AVERAGES"], breakdown:["PORTFOLIO BREAKDOWN", "PAPER ACCOUNT · CASH IS ESTIMATED FROM THE ACCOUNT SIZE AND OPEN LOTS"], strategy:["STRATEGY DECK", "EVERY PLAYBOOK ON THE FLOOR"]};
+const SCREEN_META = {live:["LIVE FEED", "1-MINUTE BARS, FILLS AND NEWS FROM THE PAPER ACCOUNT'S LIVE MONITOR"], heatmap:["MARKET HEATMAP", "DAY MOVE · AREA ≈ MARKET SIZE (APPROX.)"], news:["NEWS WIRE", "BUILT FROM THE AGENTS' OWN DECISIONS, FILLS AND VERDICTS"], trends:["TRENDS", "PRICE VS 20 · 50 · 200 DAY AVERAGES"], breakdown:["PORTFOLIO BREAKDOWN", "BROKER POSITIONS WHILE STREAMING, OTHERWISE ESTIMATED FROM THE ACCOUNT SIZE AND OPEN LOTS"], strategy:["STRATEGY DECK", "EVERY PLAYBOOK ON THE FLOOR"]};
 function renderHud() {
   const crew = state.crew, hp = crew.length ? Math.min(...crew.map(a => a.hp)) : 1, arc = document.getElementById("gaugeArc");
   arc.setAttribute("stroke-dasharray", `${(hp * 264).toFixed(1)} 264`); arc.setAttribute("stroke", hp > .5 ? UP : hp > .2 ? GOLD : DOWN); arc.style.color = arc.getAttribute("stroke");
   document.getElementById("gaugeTxt").textContent = Math.round(hp * 100);
   document.getElementById("hudBench").textContent = state.bench.length;
-  const spy = state.closes.SPY, mk = document.getElementById("hudMkt");
-  if (spy && spy.length > 1) { const ch = spy[spy.length - 1] / spy[spy.length - 2] - 1; mk.innerHTML = `SPY <span class="${ch >= 0 ? "up" : "down"}">${ch >= 0 ? "▲" : "▼"} ${Math.abs(ch * 100).toFixed(2)}%</span>`; }
+  const spy = quote("SPY"), mk = document.getElementById("hudMkt");
+  if (spy) mk.innerHTML = `SPY ${spy.px.toFixed(2)} <span class="${spy.ch >= 0 ? "up" : "down"}">${spy.ch >= 0 ? "▲" : "▼"} ${Math.abs(spy.ch * 100).toFixed(2)}%</span>${spy.live ? " · LIVE" : ""}`;
+  const s = feed.state, hl = document.getElementById("hudLive");
+  if (s && liveFresh()) hl.innerHTML = `TODAY <span class="${s.day_pl > 0 ? "up" : s.day_pl < 0 ? "down" : ""}">${money(s.day_pl)} (${pct(s.day_pl_pct || 0)})</span> · EQUITY $${Math.round(s.equity).toLocaleString("en-US")}${s.halted ? ' · <span class="down">HALTED</span>' : ""}`;
+  else hl.textContent = s ? `LIVE FEED IDLE · LAST ${etTime(s.ts)}` : "LIVE FEED OFF";
   const held = [...new Set(crew.flatMap(a => a.positions.map(p => p.symbol)))], syms = held.length ? held : [...new Set(crew.flatMap(a => a.symbols))];
-  document.getElementById("chips").innerHTML = syms.filter(s => state.closes[s] && state.closes[s].length > 1).map(s => { const c = state.closes[s], ch = c[c.length - 1] / c[c.length - 2] - 1;
+  document.getElementById("chips").innerHTML = syms.filter(s => quote(s)).map(s => { const ch = quote(s).ch;
     return `<button type="button" class="chip" data-sym="${esc(s)}">${esc(s)}<span class="${ch >= 0 ? "up" : "down"}">${ch >= 0 ? "▲" : "▼"}${Math.abs(ch * 100).toFixed(1)}%</span></button>`; }).join("") || `<span class="label">NO TICKERS YET</span>`;
   document.querySelectorAll(".chip[data-sym]").forEach(b => b.onclick = () => openDetail("ticker", b.dataset.sym));
   document.getElementById("screenChips").innerHTML = Object.keys(SCREEN_META).map(k => `<button type="button" class="chip scr" data-kind="${k}">${k.toUpperCase()}</button>`).join("");
@@ -982,11 +1177,13 @@ function detailCanvas(tall) {
 const up_dn = v => (v ?? 0) >= 0 ? "up" : "down";
 const pctCell = v => v == null ? "—" : pct(v);
 function openDetail(kind, key) {
+  if (kind !== openKind || key !== openKey) { if (kind === "ticker" || kind !== openKind) tickerRange = null; }
   openKind = kind; openKey = key;
   const el = document.getElementById("detail"), body = document.getElementById("dBody"); el.hidden = false; el.classList.toggle("wide", kind !== "ticker");
   const title = document.getElementById("dSym"), who = document.getElementById("dWho");
   if (kind === "ticker") return openTicker(key, title, who, body);
   title.textContent = SCREEN_META[kind][0]; who.textContent = SCREEN_META[kind][1] + ` · ${state.mode === "live" ? "LIVE" : "SNAPSHOT"}`;
+  if (kind === "live") return openLive(key, body);
   if (kind === "heatmap") {
     const {g, W, H} = detailCanvas(true); heatBoxes(g, 0, 0, W, H, true);
     body.innerHTML = `<div class="tscroll"><table class="dtable"><thead><tr><th>TICKER</th><th>LAST</th><th>DAY</th><th>5D</th><th>20D</th><th>APPROX. SIZE</th></tr></thead><tbody>` + heatItems().map(i => { const c = state.closes[i.s];
@@ -1019,25 +1216,60 @@ function openDetail(kind, key) {
         ${rs.length ? `<li><span class="k">BACKTESTS</span> ${rs.map(r => `<span class="${r.verdict === "PASS" ? "up" : "down"}">${esc(r.symbol)} ${esc(r.verdict)}${r.cagr != null ? " " + pct(r.cagr, 1) + "/yr" : ""}</span>`).join(" · ")}</li>` : `<li class="muted">No backtest on record.</li>`}</ul></div>`; }).join("") || `<p class="muted">No strategies loaded.</p>`;
   }
 }
+let tickerRange = null;
+// a full-size line chart with a crosshair readout
+function seriesChart(vals, label, entry, footL, footR) {
+  const {cv, g, W, H} = detailCanvas(false);
+  const draw = at => {
+    g.clearRect(0, 0, W, H); if (vals.length < 2) return;
+    const {lo, hi} = chartLines(g, vals, 8, 10, W - 70, H - 34, entry);
+    g.font = MONO(11); g.fillStyle = "#6f93a8"; for (let k = 0; k <= 3; k++) g.fillText((lo + (hi - lo) * (1 - k / 3)).toFixed(2), W - 56, 10 + k * (H - 34) / 3 + 4);
+    g.fillText(footL, 8, H - 6); g.textAlign = "right"; g.fillText(footR, W - 62, H - 6); g.textAlign = "left";
+    if (at != null) { const x = 8 + (W - 70) * at / (vals.length - 1); g.strokeStyle = "rgba(223,248,255,.5)"; g.lineWidth = 1; g.beginPath(); g.moveTo(x, 10); g.lineTo(x, H - 24); g.stroke();
+      g.fillStyle = "#dff8ff"; g.font = MONO(12); g.fillText(`${vals[at].toFixed(2)} · ${label(at)}`, Math.min(x + 6, W - 190), 22); }
+  };
+  draw(null);
+  cv.onpointermove = e => { const r = cv.getBoundingClientRect(), i = Math.round(((e.clientX - r.left - 8) / (W - 70)) * (vals.length - 1)); if (i >= 0 && i < vals.length) draw(i); };
+  cv.onpointerleave = () => draw(null);
+}
 function openTicker(sym, title, who, body) {
-  const c = state.closes[sym] || [], last = c[c.length - 1], prev = c[c.length - 2];
+  const c = state.closes[sym] || [], bars = feed.bars[sym] || [], q = quote(sym);
+  const range = bars.length > 1 && (tickerRange === "intra" || (tickerRange == null && liveFresh())) ? "intra" : "daily";
   const agents = state.crew.filter(a => a.positions.some(p => p.symbol === sym) || (a.symbols || []).includes(sym));
   const pos = agents.flatMap(a => a.positions.filter(p => p.symbol === sym).map(p => ({...p, who:a.p.name})));
-  title.textContent = sym; who.textContent = (pos.length ? "HELD BY " : agents.length ? "WATCHED BY " : "ON THE BOARD · ") + agents.map(a => a.p.name).join(", ") + ` · ${c.length} DAILY CLOSES · ${state.mode === "live" ? "LIVE" : "SNAPSHOT"}`;
-  const {cv, g, W, H} = detailCanvas(false);
-  if (c.length > 1) {
-    const {lo, hi} = chartLines(g, c, 8, 10, W - 70, H - 34, pos[0] ? pos[0].entry : null);
-    g.font = MONO(11); g.fillStyle = "#6f93a8"; for (let k = 0; k <= 3; k++) g.fillText((lo + (hi - lo) * (1 - k / 3)).toFixed(2), W - 56, 10 + k * (H - 34) / 3 + 4);
-    g.fillText(`${c.length} SESSIONS AGO`, 8, H - 6); g.textAlign = "right"; g.fillText("LAST CLOSE", W - 62, H - 6); g.textAlign = "left";
-    cv.onpointermove = e => { const r = cv.getBoundingClientRect(), i = Math.round(((e.clientX - r.left - 8) / (W - 70)) * (c.length - 1)); if (i < 0 || i >= c.length) return;
-      openTicker(sym, title, who, body); const x = 8 + (W - 70) * i / (c.length - 1); g.strokeStyle = "rgba(223,248,255,.5)"; g.lineWidth = 1; g.beginPath(); g.moveTo(x, 10); g.lineTo(x, H - 24); g.stroke();
-      g.fillStyle = "#dff8ff"; g.font = MONO(12); g.fillText(`${c[i].toFixed(2)} · ${c.length - 1 - i}d ago`, Math.min(x + 6, W - 150), 22); };
-  }
-  const ch = prev ? last / prev - 1 : 0, hi = Math.max(...c), lo = Math.min(...c), s20 = sma(c, 20), s50 = sma(c, 50), s200 = sma(c, 200);
-  const cells = [["LAST CLOSE", last ? "$" + last.toFixed(2) : "—"], ["DAY", `<span class="${ch >= 0 ? "up" : "down"}">${pct(ch)}</span>`], [`${c.length}D RANGE`, c.length ? `$${lo.toFixed(2)} – $${hi.toFixed(2)}` : "—"],
-                 ["VS 20 · 50 · 200D", [s20, s50, s200].map(v => v == null ? "·" : `<span class="${last > v ? "up" : "down"}">${last > v ? "▲" : "▼"}</span>`).join(" ")]];
+  title.textContent = sym;
+  who.textContent = (pos.length ? "HELD BY " : agents.length ? "WATCHED BY " : "ON THE BOARD · ") + agents.map(a => a.p.name).join(", ") +
+    (range === "intra" ? ` · ${bars.length} ONE-MINUTE BARS TODAY` : ` · ${c.length} DAILY CLOSES`) + ` · ${q && q.live ? "STREAMING" : state.mode === "live" ? "LIVE FILES" : "SNAPSHOT"}`;
+  const entry = pos[0] ? pos[0].entry : null;
+  if (range === "intra") seriesChart(bars.map(b => b[1]), i => etTime(bars[i][0]), entry, etTime(bars[0][0]), "NOW");
+  else if (c.length > 1) seriesChart(c, i => `${c.length - 1 - i}d ago`, entry, `${c.length} SESSIONS AGO`, "LAST CLOSE");
+  else detailCanvas(false);
+  const last = q ? q.px : null, ch = q ? q.ch : 0, hi = c.length ? Math.max(...c) : null, lo = c.length ? Math.min(...c) : null, s20 = sma(c, 20), s50 = sma(c, 50), s200 = sma(c, 200);
+  const cells = [[q && q.live ? "LIVE PRICE" : "LAST CLOSE", last != null ? "$" + last.toFixed(2) : "—"], ["DAY", `<span class="${ch >= 0 ? "up" : "down"}">${pct(ch)}</span>`],
+                 [`${c.length}D RANGE`, c.length ? `$${lo.toFixed(2)} – $${hi.toFixed(2)}` : "—"],
+                 ["VS 20 · 50 · 200D", [s20, s50, s200].map(v => v == null || last == null ? "·" : `<span class="${last > v ? "up" : "down"}">${last > v ? "▲" : "▼"}</span>`).join(" ")]];
   pos.forEach(p => cells.push([`${p.who} POSITION`, `${p.qty} SH @ $${p.entry.toFixed(2)}`], ["UNREALIZED", `<span class="${p.pnl > 0 ? "up" : p.pnl < 0 ? "down" : ""}">${money(p.pnl)} (${pct(p.mark / p.entry - 1)})</span>`], ["SINCE", esc(p.since)]));
-  body.innerHTML = `<div class="dgrid">${cells.map(([k, v]) => `<div>${k}<b>${v}</b></div>`).join("")}</div>`;
+  const toggle = bars.length > 1 ? `<div class="chips" style="justify-content:flex-start;max-width:none;margin-bottom:10px"><button type="button" class="chip ${range === "intra" ? "on" : ""}" data-range="intra">TODAY · 1-MIN</button><button type="button" class="chip ${range === "daily" ? "on" : ""}" data-range="daily">1 YEAR · DAILY</button></div>` : "";
+  body.innerHTML = toggle + `<div class="dgrid">${cells.map(([k, v]) => `<div>${k}<b>${v}</b></div>`).join("")}</div>`;
+  body.querySelectorAll("[data-range]").forEach(b => b.onclick = () => { tickerRange = b.dataset.range; openTicker(sym, title, who, body); });
+}
+function openLive(key, body) {
+  const s = feed.state, fresh = liveFresh(), syms = Object.keys(feed.bars).filter(x => feed.bars[x].length > 1).sort();
+  const sym = key && feed.bars[key] ? key : liveFocus(), bars = feed.bars[sym] || [];
+  document.getElementById("dWho").textContent = (s ? (fresh ? `STREAMING · UPDATED ${etTime(s.ts)}` : `FEED IDLE · LAST UPDATE ${etTime(s.ts)}`) : "THE LIVE MONITOR HASN'T WRITTEN ANYTHING YET") + ` · ${sym} 1-MINUTE`;
+  if (bars.length > 1) {
+    const pos = s && (s.positions || []).find(p => p.symbol === sym);
+    seriesChart(bars.map(b => b[1]), i => etTime(bars[i][0]), pos ? pos.avg : null, etTime(bars[0][0]), "NOW");
+  } else { const {g} = detailCanvas(false); g.font = MONO(14); g.fillStyle = "#6f93a8"; g.fillText(s ? `No 1-minute bars for ${sym} yet.` : "Start the live monitor during market hours to stream prices here.", 10, 30); }
+  const chips = syms.length ? `<div class="chips" style="justify-content:flex-start;max-width:none;margin-bottom:10px">${syms.map(x => { const q = quote(x);
+    return `<button type="button" class="chip ${x === sym ? "on" : ""}" data-lsym="${esc(x)}">${esc(x)}${q ? `<span class="${q.ch >= 0 ? "up" : "down"}">${q.ch >= 0 ? "▲" : "▼"}${Math.abs(q.ch * 100).toFixed(2)}%</span>` : ""}</button>`; }).join("")}</div>` : "";
+  const grid = s ? `<div class="dgrid">${[["TODAY", `<span class="${s.day_pl > 0 ? "up" : s.day_pl < 0 ? "down" : ""}">${money(s.day_pl)} (${pct(s.day_pl_pct || 0)})</span>`], ["EQUITY", "$" + Math.round(s.equity).toLocaleString("en-US")],
+    ["CASH", "$" + Math.round(s.cash).toLocaleString("en-US")], ["POSITIONS", (s.positions || []).length], ["KILL SWITCH", s.halted ? '<span class="down">HALTED</span>' : '<span class="up">ARMED</span>']].map(([k, v]) => `<div>${k}<b>${v}</b></div>`).join("")}</div>` : "";
+  const posT = s && (s.positions || []).length ? `<div class="tscroll"><table class="dtable"><thead><tr><th>TICKER</th><th>SHARES</th><th>AVG</th><th>LIVE</th><th>VALUE</th><th>UNREALIZED</th></tr></thead><tbody>${s.positions.map(p => `<tr><td>${esc(p.symbol)}</td><td>${p.qty}</td><td>$${(+p.avg).toFixed(2)}</td><td>$${(+p.price).toFixed(2)}</td><td>$${Math.round(p.value).toLocaleString("en-US")}</td><td class="${p.unrealized > 0 ? "up" : p.unrealized < 0 ? "down" : ""}">${money(p.unrealized)}</td></tr>`).join("")}</tbody></table></div>` : "";
+  const items = liveItems();
+  const list = `<ul class="dlist">${items.length ? items.map(it => `<li style="border-left-color:${KIND_COLOR[it.kind] || "#dff8ff"}"><span class="k">${etTime(it.ts)}<br><span style="color:${KIND_COLOR[it.kind] || "#dff8ff"}">${it.kind}</span></span><span>${it.url && /^https?:\/\//.test(it.url) ? `<a href="${esc(it.url)}" target="_blank" rel="noopener">${esc(it.text)}</a>` : esc(it.text)}</span></li>`).join("") : `<li><span class="k">—</span><span class="muted">No fills or headlines yet today.</span></li>`}</ul>`;
+  body.innerHTML = chips + grid + posT + list;
+  body.querySelectorAll("[data-lsym]").forEach(b => b.onclick = () => openDetail("live", b.dataset.lsym));
 }
 function closeDetail() { openKind = null; document.getElementById("detail").hidden = true; }
 document.getElementById("dClose").onclick = closeDetail;
@@ -1076,14 +1308,34 @@ function renderPanels(src) {
     const act = d.action.toUpperCase(), cls = act.includes("BUY") ? "up" : act.includes("SELL") ? "down" : "muted";
     return `<li><time>${t.toLocaleDateString("en-US", {month:"short", day:"numeric"})} ${t.toLocaleTimeString("en-US", {hour:"2-digit", minute:"2-digit"})}</time><b>${esc(names[d.strategy])}</b> <span class="${cls}">${esc(act)}</span> ${esc(d.symbol)}${det.qty ? ` ${det.qty} SH` : ""}${det.price != null ? ` @ $${Number(det.price).toFixed(2)}` : ""} <span class="muted">· ${esc(d.reason)}</span></li>`;
   }).join("") || "<li class='muted'>No moves yet. The agent runs after each market close.</li>";
-  document.getElementById("foot").textContent = state.mode === "live" ? `Live from the project files · checked ${new Date().toLocaleTimeString("en-US")} · prices are the last daily close · market sizes are approximate`
-    : `Snapshot from ${new Date(src.generatedAt).toLocaleString("en-US")} · prices are the last daily close · market sizes are approximate`;
-  const tag = document.getElementById("liveTag"); tag.textContent = state.mode === "live" ? "● LIVE" : "SNAPSHOT"; tag.classList.toggle("off", state.mode !== "live");
+  const priceNote = liveFresh() ? `prices stream from the live monitor (1-minute bars, updated ${etTime(feed.state.ts)})` : "prices are the last daily close";
+  document.getElementById("foot").textContent = (SERVER_MODE ? `Hosted on the paper-trading server · daily data from ${new Date(src.generatedAt).toLocaleString("en-US")}` : state.mode === "live" ? `Live from the project files · checked ${new Date().toLocaleTimeString("en-US")}` : `Snapshot from ${new Date(src.generatedAt).toLocaleString("en-US")}`) + ` · ${priceNote} · market sizes are approximate`;
+  const tag = document.getElementById("liveTag"), streaming = liveFresh();
+  tag.textContent = streaming ? "● STREAMING" : state.mode === "live" ? "● LIVE" : "SNAPSHOT"; tag.classList.toggle("off", !streaming && state.mode !== "live");
 }
+function renderTape() {
+  const el = document.getElementById("tapeIn"), s = feed.state, fresh = liveFresh();
+  const head = s ? (fresh ? `<i class="st">● STREAMING ${etTime(s.ts)}</i><span>TODAY <b class="${s.day_pl > 0 ? "up" : s.day_pl < 0 ? "down" : ""}">${money(s.day_pl)}</b></span><span>EQUITY <b>$${Math.round(s.equity).toLocaleString("en-US")}</b></span>${s.halted ? '<i class="halt">KILL SWITCH HALTED</i>' : ""}`
+    : `<i class="st idle">FEED IDLE · LAST ${etTime(s.ts)}</i>`) : `<i class="st idle">LIVE FEED OFF · SHOWING DAILY CLOSES</i>`;
+  const syms = [...new Set([...Object.keys(feed.bars), ...Object.keys(state.closes)])].sort();
+  const px = syms.map(x => { const q = quote(x); return q ? `<span>${esc(x)} <b>${q.px.toFixed(2)}</b> <i class="${q.ch >= 0 ? "up" : "down"}">${q.ch >= 0 ? "▲" : "▼"}${Math.abs(q.ch * 100).toFixed(2)}%</i></span>` : ""; }).join("");
+  const ev = liveItems().slice(0, 8).map(it => `<span><i style="color:${KIND_COLOR[it.kind] || "#dff8ff"}">${it.kind}</i> <b>${esc(it.text)}</b></span>`).join("");
+  const html = head + px + ev;
+  if (el.dataset.html !== html) { el.dataset.html = html; el.innerHTML = html + html; el.style.animationDuration = Math.max(40, el.textContent.length * 0.09) + "s"; }
+}
+let lastSig = "";
 function apply(src) {
   src.strategies ||= []; src.results ||= [];
+  if (src.live && !feed.file && !feed.state) { feed.state = src.live.state || null; feed.bars = src.live.bars || {}; feed.events = src.live.events || []; }
   state.src = src; state.closes = src.closes; state.crew = buildCrew(src); state.bench = buildBench(src, state.crew); state.wire = buildWire(src, state.crew, state.bench);
-  renderPanels(src); renderHud(); dataVersion++;
+  renderPanels(src); renderHud(); renderTape();
+  const sig = JSON.stringify([state.crew.map(a => [a.spec.name, a.symbols, a.positions.map(p => p.symbol + ":" + p.qty)]), state.bench.map(b => b.spec.name), Object.keys(src.closes).sort()]);
+  if (sig !== lastSig) { lastSig = sig; dataVersion++; } else refreshTextures();
+  if (renderer && still) render(performance.now());
+}
+function onLive() {
+  state.crew = buildCrew(state.src); state.wire = buildWire(state.src, state.crew, state.bench);
+  renderPanels(state.src); renderHud(); renderTape(); refreshTextures();
   if (renderer && still) render(performance.now());
 }
 
@@ -1149,6 +1401,27 @@ async function loadLive(now) {
   try { const c = JSON.parse((await readText(root + "/config.json")).text); account = {account_size:c.account_size, starting_cash:c.starting_cash}; } catch (err) {}
   return {approved, strategies, results:resultsCache, orders, lots, decisions, closes, account, generatedAt:new Date().toISOString()};
 }
+// the live monitor rewrites state.json every 30s and appends 1-minute bars to today's feed file; read only the new bytes each time
+async function pollLive() {
+  let st;
+  try { st = JSON.parse((await readText(root + "/data/live/state.json")).text); } catch (e) { if (e && e.code === "not_granted") throw e; return false; }
+  feed.state = st;
+  try {
+    const ls = await files.list({path: root + "/data/live"});
+    const ents = ls.entries.filter(e => !e.isDirectory && /feed-\d{4}-\d{2}-\d{2}\.jsonl$/.test(e.path)).sort((x, y) => x.path < y.path ? -1 : 1), ent = ents[ents.length - 1], f = ent && ent.path;
+    if (f) {
+      if (f !== feed.file) { feed.file = f; feed.offset = 0; feed.partial = ""; feed.bars = {}; feed.events = []; feed.dec = new TextDecoder(); }
+      const size = ent.size;
+      if (size < feed.offset) { feed.offset = 0; feed.partial = ""; feed.bars = {}; feed.events = []; feed.dec = new TextDecoder(); }
+      while (size > feed.offset) {
+        const len = Math.min(512000, size - feed.offset), r = await files.read(f, {offset:feed.offset, length:len});
+        if (!r.bytes || !r.bytes.length) break;
+        ingestFeed(feed.dec.decode(r.bytes, {stream:true})); feed.offset += r.bytes.length;
+      }
+    }
+  } catch (e) { if (e && e.code === "not_granted") throw e; }
+  return true;
+}
 async function goLive() {
   const note = document.getElementById("sourceNote");
   try {
@@ -1157,16 +1430,70 @@ async function goLive() {
     root = await findRoot();
     const refresh = async () => { try { const src = await loadLive(Date.now()); state.mode = "live"; apply(src); } catch (e) { if (e && e.code === "not_granted") { note.textContent = "Showing a snapshot. You chose not to share project files with this page."; return true; } } };
     if (await refresh()) return;
-    note.textContent = "Live: reads the paper journal, strategies and prices from the project every minute.";
+    note.textContent = "Live: reads the paper journal and strategies every minute, and the live market feed every 15 seconds.";
     setInterval(refresh, 60000);
+    const tick = async () => { try { if (await pollLive()) onLive(); } catch (e) {} };
+    await tick(); setInterval(tick, 15000);
   } catch (e) { note.textContent = e && e.code === "not_granted" ? "Showing a snapshot. You chose not to share project files with this page." : "Showing a snapshot. Live data isn't reachable right now."; }
 }
 
+// ------------------------------------------------------------------ server-hosted copy: same-origin feed endpoints, token in the URL or saved in this browser
+let feedToken = null, serverPrimed = false, serverTimer = 0;
+function savedToken() {
+  const q = new URLSearchParams(location.search).get("token");
+  if (q) {
+    try { localStorage.setItem("floorFeedToken", q); } catch (e) {}
+    // the token stays in the address bar: the server only hands out this page when the URL carries it
+    return q;
+  }
+  try { return localStorage.getItem("floorFeedToken"); } catch (e) { return null; }
+}
+async function getJSON(path, params = {}) {
+  const u = new URL(path, location.href); u.search = "";
+  u.searchParams.set("token", feedToken); for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v);
+  const r = await fetch(u, {cache:"no-store"});
+  if (r.status === 403) throw {code:"bad_token"};
+  if (!r.ok) throw {code:"http_" + r.status};
+  return r.json();
+}
+async function pollServer() {
+  const st = await getJSON("/state.json");
+  if (!st || !st.ts) return false;
+  const day = String(st.ts).slice(0, 10);
+  if (feed.day && feed.day !== day) { feed.bars = {}; feed.events = []; seenEvents.clear(); serverPrimed = false; feed.lastTs = null; }
+  feed.day = day; feed.state = st;
+  // after the first load, ask only for events newer than the last one seen (servers without `since` just return the last n)
+  const evs = await getJSON("/feed", serverPrimed && feed.lastTs ? {n:2000, since:feed.lastTs} : {n:2000});
+  if (Array.isArray(evs)) evs.forEach(e => { ingestEvent(e); if (e && e.ts && (!feed.lastTs || e.ts > feed.lastTs)) feed.lastTs = e.ts; });
+  serverPrimed = true; return true;
+}
+function askToken(msg) {
+  clearInterval(serverTimer);
+  const box = document.getElementById("tokenBox"); box.hidden = false; document.getElementById("tokenErr").textContent = msg || "";
+  box.onsubmit = e => { e.preventDefault(); const v = document.getElementById("tokenIn").value.trim(); if (!v) return;
+    try { localStorage.setItem("floorFeedToken", v); } catch (err) {} box.hidden = true; goServer(); };
+}
+async function goServer() {
+  const note = document.getElementById("sourceNote");
+  feedToken = savedToken();
+  if (!feedToken) { askToken(); note.textContent = "Waiting for the feed token."; return; }
+  state.mode = "live";
+  const tick = async () => {
+    try { if (await pollServer()) { onLive(); note.textContent = "Live: streams from the paper-trading server every 15 seconds. Strategies and daily history come from the last deploy."; } else note.textContent = "Connected. The live monitor hasn't written anything yet; it starts when the market opens."; }
+    catch (e) { if (e && e.code === "bad_token") { try { localStorage.removeItem("floorFeedToken"); } catch (err) {} askToken("That token didn't work."); } else note.textContent = "Can't reach the feed right now; retrying."; }
+  };
+  await tick(); clearInterval(serverTimer); serverTimer = setInterval(tick, 15000);
+}
+
 if (SNAPSHOT) apply(SNAPSHOT);
-// The viewer adds window.claude shortly after load; outside claude.ai it never appears.
-(function waitForViewer(n) {
-  if (window.claude && typeof window.claude.use === "function") return goLive();
-  if (n > 20) { document.getElementById("sourceNote").textContent = "Showing a snapshot."; return; }
-  setTimeout(() => waitForViewer(n + 1), 250);
-})(0);
+if (SERVER_MODE) goServer();
+else {
+  const link = document.getElementById("liveFloorLink"); link.href = LIVE_FLOOR_URL; link.hidden = false;
+  // The viewer adds window.claude shortly after load; outside claude.ai it never appears.
+  (function waitForViewer(n) {
+    if (window.claude && typeof window.claude.use === "function") return goLive();
+    if (n > 20) { document.getElementById("sourceNote").textContent = "Showing a snapshot."; return; }
+    setTimeout(() => waitForViewer(n + 1), 250);
+  })(0);
+}
 </script>

@@ -47,6 +47,14 @@ def live_feed(root: Path = ROOT) -> dict | None:
     return {"state": state, "bars": bars, "events": events[:30]}
 
 
+def _clipping(root: Path) -> dict | None:
+    """Status of the TikTok clipping pipeline (clipping/status.json), shown in the floor's clip studio."""
+    try:
+        return json.loads((root.parent / "clipping" / "status.json").read_text())
+    except Exception:
+        return None
+
+
 def snapshot(root: Path = ROOT) -> dict:
     approved, strategies = [], {}
     for f in sorted((root / "strategies").rglob("*.json")):
@@ -102,7 +110,7 @@ def snapshot(root: Path = ROOT) -> dict:
         except Exception:
             account = None
     return {"approved": approved, "strategies": list(strategies.values()), "results": results, **rows, "closes": closes,
-            "account": account, "live": live_feed(root), "generatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+            "account": account, "live": live_feed(root), "clipping": _clipping(root), "generatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds")}
 
 
 def build(out: Path, server: bool = False) -> Path:
