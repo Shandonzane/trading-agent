@@ -87,10 +87,32 @@ class AlpacaPaperBroker:
             if float(o.qty) == qty and abs(float(o.stop_price) - stop_price) < 0.01:
                 return "kept"
             self.client.cancel_order_by_id(o.id)
+        whole = float(qty).is_integer()  # Alpaca takes fractional stops as DAY orders only: re-placed each run
         self.client.submit_order(StopOrderRequest(
-            symbol=symbol, qty=qty, side=OrderSide.SELL, time_in_force=TimeInForce.GTC,
+            symbol=symbol, qty=qty, side=OrderSide.SELL, time_in_force=TimeInForce.GTC if whole else TimeInForce.DAY,
             stop_price=stop_price, client_order_id=_coid(f"{tag}-stop")))
         return "placed"
+
+    def stop_fills(self, days: int = 10) -> list[tuple]:
+        """(order id, client_order_id, symbol, filled_at) for stop orders filled in the last few days."""
+        from datetime import datetime, timedelta, timezone
+        from alpaca.trading.enums import QueryOrderStatus
+        from alpaca.trading.requests import GetOrdersRequest
+
+        orders = self.client.get_orders(GetOrdersRequest(
+            status=QueryOrderStatus.CLOSED, after=datetime.now(timezone.utc) - timedelta(days=days), limit=500))
+        return [(str(o.id), str(o.client_order_id), o.symbol, o.filled_at) for o in orders
+                if "-stop-" in str(o.client_order_id) and o.filled_at and float(o.filled_qty or 0) > 0]
+
+    def submit_limit(self, symbol: str, qty: float, side: str, limit: float, tag: str = "") -> tuple[str, str]:
+        """Limit DAY order, used for option contracts (never market orders on wide spreads)."""
+        from alpaca.trading.enums import OrderSide, TimeInForce
+        from alpaca.trading.requests import LimitOrderRequest
+
+        o = self.client.submit_order(LimitOrderRequest(
+            symbol=symbol, qty=qty, side=OrderSide.BUY if side == "buy" else OrderSide.SELL,
+            time_in_force=TimeInForce.DAY, limit_price=round(limit, 2), client_order_id=_coid(tag)))
+        return str(o.id), str(o.status)
 
     def cancel_stops(self, symbol: str, tag: str):
         for o in self._open_stops(symbol, tag):
@@ -168,8 +190,14 @@ class SimBroker:
     def cancel_stops(self, *a, **k):
         pass
 
+    def stop_fills(self, *a, **k):
+        return []
+
     def last_session(self):
         return None
+
+    def submit_limit(self, symbol, qty, side, limit, tag=""):
+        return self.submit(symbol, qty, side, limit, tag)
 
     def submit(self, symbol: str, qty: float, side: str, ref_price: float, tag: str = "") -> tuple[str, str]:
         sign = 1 if side == "buy" else -1

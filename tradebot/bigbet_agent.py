@@ -47,7 +47,8 @@ def _qty(value: float, price: float, symbol: str) -> float:
     return round(value / price, 6 if is_crypto(symbol) else 4)  # fractional shares and coins
 
 
-def run(broker, con, cfg: dict, risk, note, prices_fn=None, today: date | None = None, state_path=None) -> None:
+def run(broker, con, cfg: dict, risk, note, prices_fn=None, today: date | None = None, state_path=None,
+        history_fn=None) -> None:
     bcfg = cfg.get("bigbet", {})
     if not bcfg.get("enabled"):
         return
@@ -76,6 +77,7 @@ def run(broker, con, cfg: dict, risk, note, prices_fn=None, today: date | None =
             qty = min(_qty(excess, px[s], s), l["qty"]) if l and s in px and excess > 0 else 0
             if qty <= 0:
                 continue
+            broker.cancel_stops(s, NAME)
             oid, status = broker.submit(s, qty, "sell", px[s], tag=TAG)
             journal.order(con, NAME, s, "sell", qty, px[s], broker.name, status, oid)
             journal.set_lot(con, NAME, s, round(l["qty"] - qty, 6), l["entry_price"], l["entry_date"])
@@ -85,6 +87,18 @@ def run(broker, con, cfg: dict, risk, note, prices_fn=None, today: date | None =
 
     # first buys: each name once, at its target weight. A name already bought is never topped up.
     funded = set(state.get("funded", []))
+    from . import stops
+
+    for s in list(funded):  # a stock stopped out at 12% is bought back once the re-entry rule allows
+        if not lots[s] and stops.is_out(NAME, s):
+            if history_fn is None:
+                from .data import get_bars
+
+                history_fn = lambda sym: get_bars(sym, today - timedelta(days=420), today + timedelta(days=1), use_cache=False)["close"]
+            if not stops.waiting(NAME, s, history_fn(s), note):
+                funded.discard(s)
+            else:
+                note(NAME, s, "wait", "stopped out; waiting for the re-entry rule")
     for s, w in weights.items():
         if s in funded or lots[s]:
             funded.add(s)

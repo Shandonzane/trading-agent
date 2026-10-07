@@ -45,6 +45,9 @@ def test_trend_buys_on_first_run_then_flips(tmp_path):
         def account(self):
             return Account(20_000, 20_000, 20_000)
 
+        def cancel_stops(self, *a):
+            pass
+
         def submit(self, sym, qty, side, price, tag=""):
             self.orders.append((sym, side, qty, tag))
             self.held[sym] = self.held.get(sym, 0) + (qty if side == "buy" else -qty)

@@ -22,6 +22,9 @@ class B:
     def last_session(self):
         return None
 
+    def cancel_stops(self, *a):
+        pass
+
     def submit(self, sym, qty, side, price, tag=""):
         self.orders.append((sym, side, qty, tag))
         return "id", "accepted"

@@ -4,7 +4,7 @@
   "account_size": 20000,
   "risk": {
     "max_position_pct": 0.1,
-    "max_total_exposure_pct": 0.75,
+    "max_total_exposure_pct": 0.8,
     "max_orders_per_day": 20,
     "daily_loss_kill_switch_pct": 0.03,
     "allowed_symbols": [
@@ -51,5 +51,27 @@
     },
     "max_pct": 0.1,
     "_note": "Weights are fractions of account_size. Bought once, held, no stops, no top-ups; trimmed to weights each January and whenever the sleeve passes max_pct."
+  },
+  "stops": {
+    "enabled": true,
+    "trail_pct": 0.12,
+    "exclude": [
+      "SHY",
+      "TLT",
+      "BIL",
+      "GLD"
+    ],
+    "_note": "12% trailing stop on every stock/stock-ETF holding of the portfolio, trend and big-bet slices (breakout uses its spec stop, also 12%). After a stop, the holding waits in cash until it closes above its 200-day average or falls 30% below its peak, then the slice buys it back. See research/crash-plan.md."
+  },
+  "hedge": {
+    "enabled": true,
+    "capital_pct": 0.05,
+    "underlying": "SPYM",
+    "otm": 0.2,
+    "days_out": 182,
+    "stock_share": 0.7,
+    "sell_before_days": 4,
+    "cash_etf": "BIL",
+    "_note": "Crash hedge: SPYM puts ~6 months out, ~20% below, 1 per ~$9k of stock, limit at mid, held to expiry (in-the-money ones sold 2 trading days before). Rest of the 5% in BIL. research/worst-case-hedge.md section 6."
   }
 }

@@ -33,7 +33,14 @@ def run(broker, con, cfg: dict, risk, note, bars_fn=None, today: date | None = N
         note(NAME, want, "hold", f"SPY {close:.2f} vs 200-day {sma:.2f}: stay in {want}")
         return
 
+    from . import stops
+
+    if not have and stops.waiting(NAME, want, (spy if want == "SPY" else shy)["close"], note):
+        note(NAME, want, "wait", "stopped out; waiting for the re-entry rule")
+        return
+
     if have:  # the rule flipped: exit the old side first
+        broker.cancel_stops(have, NAME)
         qty = min(lots[have]["qty"], max(broker.positions().get(have, 0), 0))
         if qty > 0:
             oid, status = broker.submit(have, qty, "sell", price[have], tag=NAME)
