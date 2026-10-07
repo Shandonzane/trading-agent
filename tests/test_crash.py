@@ -99,3 +99,32 @@ def test_hedge_buys_puts_and_parks_rest_in_bills(tmp_path, monkeypatch):
 
 def test_parse_occ():
     assert hedge_agent.parse_occ("SPYM270319P00075000") == (date(2027, 3, 19), 75.0)
+
+
+def test_buy_lifts_other_slices_stops_when_alpaca_flags_a_wash_trade():
+    from tradebot.broker import AlpacaPaperBroker
+
+    class Client:
+        def __init__(self):
+            self.open = [SimpleNamespace(id="s1", client_order_id="20-day-breakout-stop-abc", qty=2, stop_price=665.46)]
+            self.sent = []
+
+        def get_orders(self, req):
+            return list(self.open)
+
+        def cancel_order_by_id(self, oid):
+            self.open = [o for o in self.open if o.id != oid]
+
+        def submit_order(self, req):
+            if self.open and req.side.value == "buy":
+                raise Exception('{"code":40310000,"message":"potential wash trade detected. use complex orders"}')
+            if self.sent and req.side.value == "sell":
+                raise Exception('{"code":40310000,"message":"potential wash trade detected"}')
+            self.sent.append(req)
+            return SimpleNamespace(id="o1", status="accepted")
+
+    b = AlpacaPaperBroker.__new__(AlpacaPaperBroker)
+    b.client = Client()
+    assert b.submit("QQQ", 0.5, "buy", 750, tag="Trial: golden cross") == ("o1", "accepted")
+    assert b.client.open == []                                         # the breakout stop was lifted
+    assert b.ensure_stop("QQQ", 2, 665.46, "20-day breakout").startswith("deferred")  # back once the buy fills

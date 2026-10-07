@@ -20,6 +20,11 @@ def _coid(tag: str) -> str:
     return f"{_slug(tag)}-{uuid.uuid4().hex[:12]}"
 
 
+def _is_wash_reject(e) -> bool:
+    """Alpaca rejects a buy while a sell stop on the same symbol is open (and the reverse)."""
+    return "40310000" in str(e) or "wash trade" in str(e)
+
+
 def _order_symbol(p) -> str:
     """Alpaca lists crypto positions as BTCUSD but trades them as BTC/USD; journal lots use BTC/USD."""
     if "crypto" in str(p.asset_class).lower() and "/" not in p.symbol:
@@ -57,11 +62,23 @@ class AlpacaPaperBroker:
         from alpaca.trading.enums import OrderSide, TimeInForce
         from alpaca.trading.requests import MarketOrderRequest
 
-        o = self.client.submit_order(MarketOrderRequest(
-            symbol=symbol, qty=qty, side=OrderSide.BUY if side == "buy" else OrderSide.SELL,
-            time_in_force=TimeInForce.GTC if "/" in symbol else TimeInForce.DAY,  # crypto needs GTC
-            client_order_id=_coid(tag),
-        ))
+        def send():
+            return self.client.submit_order(MarketOrderRequest(
+                symbol=symbol, qty=qty, side=OrderSide.BUY if side == "buy" else OrderSide.SELL,
+                time_in_force=TimeInForce.GTC if "/" in symbol else TimeInForce.DAY,  # crypto needs GTC
+                client_order_id=_coid(tag),
+            ))
+
+        try:
+            o = send()
+        except Exception as e:
+            if side != "buy" or not _is_wash_reject(e):
+                raise
+            # Another slice's stop on this symbol blocks the buy. Lift the symbol's stops; the next
+            # daily run puts them back once this buy has filled (ensure_stop defers until then).
+            for st in self._open_stops(symbol, None):
+                self.client.cancel_order_by_id(st.id)
+            o = send()
         return str(o.id), str(o.status)
 
     def avg_price(self, symbol: str) -> float | None:
@@ -70,12 +87,15 @@ class AlpacaPaperBroker:
         except Exception:
             return None
 
-    def _open_stops(self, symbol: str, tag: str):
+    def _open_stops(self, symbol: str, tag: str | None):
+        """Open stop orders on the symbol for this strategy, or for every strategy when tag is None."""
         from alpaca.trading.enums import QueryOrderStatus
         from alpaca.trading.requests import GetOrdersRequest
 
         orders = self.client.get_orders(GetOrdersRequest(status=QueryOrderStatus.OPEN, symbols=[symbol]))
-        return [o for o in orders if str(o.client_order_id).startswith(f"{_slug(tag)}-stop-")]
+        mark = "-stop-" if tag is None else None
+        return [o for o in orders if (mark in str(o.client_order_id) if mark else
+                                      str(o.client_order_id).startswith(f"{_slug(tag)}-stop-"))]
 
     def ensure_stop(self, symbol: str, qty: float, stop_price: float, tag: str) -> str:
         """Keep one GTC stop-loss order at the broker for this strategy's shares."""
@@ -88,9 +108,14 @@ class AlpacaPaperBroker:
                 return "kept"
             self.client.cancel_order_by_id(o.id)
         whole = float(qty).is_integer()  # Alpaca takes fractional stops as DAY orders only: re-placed each run
-        self.client.submit_order(StopOrderRequest(
-            symbol=symbol, qty=qty, side=OrderSide.SELL, time_in_force=TimeInForce.GTC if whole else TimeInForce.DAY,
-            stop_price=stop_price, client_order_id=_coid(f"{tag}-stop")))
+        try:
+            self.client.submit_order(StopOrderRequest(
+                symbol=symbol, qty=qty, side=OrderSide.SELL, time_in_force=TimeInForce.GTC if whole else TimeInForce.DAY,
+                stop_price=stop_price, client_order_id=_coid(f"{tag}-stop")))
+        except Exception as e:
+            if not _is_wash_reject(e):
+                raise
+            return "deferred: a buy on this symbol is waiting to fill"
         return "placed"
 
     def stop_fills(self, days: int = 10) -> list[tuple]:

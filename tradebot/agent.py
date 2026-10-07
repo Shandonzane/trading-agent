@@ -235,7 +235,11 @@ def run_once(broker=None, specs=None, bars_fn=fresh_bars, today: date | None = N
                 except RiskBlock as e:
                     note(spec.name, sym, "blocked", str(e), qty=qty, price=price)
                     continue
-                oid, status = broker.submit(sym, qty, "buy", price, tag=spec.name)
+                try:
+                    oid, status = broker.submit(sym, qty, "buy", price, tag=spec.name)
+                except Exception as e:  # one rejected order must not stop the other strategies
+                    note(spec.name, sym, "error", f"buy rejected: {type(e).__name__}: {e}", qty=qty, price=price)
+                    continue
                 journal.order(con, spec.name, sym, "buy", qty, price, broker.name, status, oid)
                 journal.set_lot(con, spec.name, sym, qty, price, str(last.date()))
                 note(spec.name, sym, "buy", "entry rule fired", qty=qty, price=price)
