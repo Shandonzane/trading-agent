@@ -110,3 +110,19 @@ def test_agent_sim_run(tmp_path, monkeypatch):
     spec2 = StrategySpec(name="bad", symbols=["GME"], entry=always())
     log2 = agent.run_once(broker=broker, specs=[spec2], bars_fn=lambda *a, **k: df)
     assert log2[0]["action"] == "blocked"
+
+
+def test_trial_strategy_trades_small_fractional(tmp_path, monkeypatch):
+    from tradebot import agent, bigbet_agent, hedge_agent, portfolio_agent, trend_agent
+
+    monkeypatch.setattr(journal, "DB", tmp_path / "j.sqlite")
+    monkeypatch.setattr(portfolio_agent, "SPEC", tmp_path / "none.json")
+    for m in (trend_agent, bigbet_agent, hedge_agent):
+        monkeypatch.setattr(m, "run", lambda *a, **k: None)
+    df = synthetic_bars(400)
+    spec = StrategySpec(name="Trial: always", symbols=["SPY"], entry=always())
+    broker = SimBroker(100_000, path=tmp_path / "sim.json")
+    buys = [r for r in agent.run_once(broker=broker, specs=[spec], bars_fn=lambda *a, **k: df) if r["action"] == "buy"]
+    price = float(df["close"].iloc[-1])
+    assert buys[0]["qty"] == round(0.04 * 100_000 / price, 4)  # config trial.position_pct, fractional
+    assert agent.is_trial(spec) and all(agent.is_trial(s) for s in agent.trial_specs())

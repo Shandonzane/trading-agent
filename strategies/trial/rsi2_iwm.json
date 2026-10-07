@@ -1,0 +1,50 @@
+{
+  "name": "Trial: RSI(2) pullback IWM",
+  "description": "Paper TRIAL (Shandon, 2026-10-07): benched strategy trading small to see live results. Not approved: passed the rules but only 0.8%/yr over the full period. Buys a 2-day RSI under 10 above the 200-day, sells above the 5-day.",
+  "symbols": [
+    "IWM"
+  ],
+  "entry": {
+    "mode": "all",
+    "conditions": [
+      {
+        "left": {
+          "ind": "close"
+        },
+        "op": ">",
+        "right": {
+          "ind": "sma",
+          "period": 200
+        }
+      },
+      {
+        "left": {
+          "ind": "rsi",
+          "period": 2
+        },
+        "op": "<",
+        "right": {
+          "value": 10
+        }
+      }
+    ]
+  },
+  "exit": {
+    "mode": "any",
+    "conditions": [
+      {
+        "left": {
+          "ind": "close"
+        },
+        "op": ">",
+        "right": {
+          "ind": "sma",
+          "period": 5
+        }
+      }
+    ]
+  },
+  "stop_loss_pct": 0.12,
+  "max_hold_days": 10,
+  "position_size_pct": 0.1
+}

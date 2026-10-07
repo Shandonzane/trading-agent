@@ -1,0 +1,41 @@
+{
+  "name": "Trial: Golden cross QQQ",
+  "description": "Paper TRIAL (Shandon, 2026-10-07): benched strategy trading small to see live results. Not approved: only 2 out-of-sample trades. Backtest 16.2%/yr, Sharpe 0.91, worst drop -29%. Entry is 'SMA50 above SMA200' so the trial starts in step with the trend instead of waiting for the next cross.",
+  "symbols": [
+    "QQQ"
+  ],
+  "entry": {
+    "mode": "all",
+    "conditions": [
+      {
+        "left": {
+          "ind": "sma",
+          "period": 50
+        },
+        "op": ">",
+        "right": {
+          "ind": "sma",
+          "period": 200
+        }
+      }
+    ]
+  },
+  "exit": {
+    "mode": "any",
+    "conditions": [
+      {
+        "left": {
+          "ind": "sma",
+          "period": 50
+        },
+        "op": "crosses_below",
+        "right": {
+          "ind": "sma",
+          "period": 200
+        }
+      }
+    ]
+  },
+  "stop_loss_pct": 0.12,
+  "position_size_pct": 0.1
+}
