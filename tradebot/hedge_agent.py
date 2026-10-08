@@ -114,6 +114,8 @@ def run(broker, con, cfg: dict, risk, note, today: date | None = None, chain_fn=
             # half of the way from the midpoint to the ask more, capped at the ask
             tries = state.get("tries", 0) + 1 if state.get("last_try", str(today)) < str(today) else 0
             mid = round(min(ask, (bid + ask) / 2 + min(tries, 2) * (ask - bid) / 4), 2)
+            if tries:  # the unfilled order never spent its premium
+                budget += state.pop("last_cost", 0)
             cost = n * 100 * mid
             if not bid or not ask:
                 why = "no two-sided quote"
@@ -130,11 +132,12 @@ def run(broker, con, cfg: dict, risk, note, today: date | None = None, chain_fn=
             journal.order(con, NAME, pick, "buy", n, mid, broker.name, status, oid)
             journal.set_lot(con, NAME, pick, n, mid, str(today))
             budget -= cost
-            state.update(tries=tries, last_try=str(today))
+            state.update(tries=tries, last_try=str(today), last_cost=round(cost, 2))
             note(NAME, pick, "buy", f"{n} puts, strike {parse_occ(pick)[1]:g} vs SPYM {spot:.2f}, expiring {exp}",
                  qty=n, price=mid, cost=round(cost, 2))
     else:
-        state.pop("tries", None), state.pop("last_try", None)
+        for k in ("tries", "last_try", "last_cost"):
+            state.pop(k, None)
         note(NAME, ", ".join(live), "hold", "holding puts to expiry")
 
     if budget > 1.5 * start:  # a crash paid off: release the excess to the stock slices
