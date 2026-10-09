@@ -185,7 +185,7 @@ main { max-width:1180px; margin:0 auto; padding-inline:16px; padding-block:22px 
   <div class="row">
     <section class="log"><h2>ACTIVITY FEED</h2><ol id="log"></ol></section>
     <section class="log"><h2>HOW IT WORKS</h2>
-      <p>Only strategies that passed their backtest and were approved get a desk. The others wander the floor as benched robots until they qualify.</p>
+      <p>Strategies that passed their backtest and were approved get a desk. Trial strategies get a gold desk while they paper trade a small stake on probation. The others wander the floor as benched robots until they qualify.</p>
       <p>Each trader's scanning eye follows its paper profit and loss: orange when flat, green when up, red when down. HP counts down toward the 3% daily loss kill switch.</p>
       <p>Tap any screen in the room (heatmap, news wire, trends, breakdown, strategies, ticker panels) to open it full size. Tap the patrol drone for a surprise. During market hours the paper account's live monitor streams 1-minute prices, fills and news, and this page checks it every 15 seconds (about 1 to 2 minutes behind the market). Scroll, pinch or use + and − to zoom; drag to look around.</p>
       <p class="muted" id="sourceNote"></p>
@@ -642,7 +642,7 @@ function ruleText(c) {
 }
 function strategyCard(s) {
   const r = s.rules || {};
-  return {name:s.name, approved:s.approved, symbols:s.symbols || [], entry:(r.entry || []).map(ruleText), exit:(r.exit || []).map(ruleText),
+  return {name:s.name, approved:s.approved, trial:s.trial, symbols:s.symbols || [], entry:(r.entry || []).map(ruleText), exit:(r.exit || []).map(ruleText),
           stop:r.stop_loss_pct, size:r.position_size_pct, hold:r.max_hold_days, complete:s.complete, missing:s.missing || [], description:s.description || ""};
 }
 function riskText(s) { return `${s.stop != null ? "stop " + Math.round(s.stop * 100) + "%" : "no stop"}${s.size != null ? " · " + Math.round(s.size * 100) + "% per position" : ""}${s.hold ? " · max " + s.hold + " days" : ""}`; }
@@ -653,7 +653,7 @@ function strategyDraw(idx = 0) {
     if (!list.length) { g.font = MONO(20); g.fillStyle = "#6f93a8"; g.fillText("NO STRATEGIES LOADED", 24, 100); return; }
     const s = strategyCard(list[idx % list.length]);
     g.font = FONT(22, 700); g.fillStyle = "#dff8ff"; g.fillText(wrap(g, s.name.toUpperCase(), W - 60)[0], 24, 92);
-    g.font = MONO(16); g.fillStyle = s.approved ? UP : "#6f93a8"; g.fillText(s.approved ? "ON DUTY · PAPER TRADING" : s.complete === false ? "BENCHED · INCOMPLETE RULES" : "BENCHED", 24, 116);
+    g.font = MONO(16); g.fillStyle = s.approved ? UP : s.trial ? GOLD : "#6f93a8"; g.fillText(s.approved ? "ON DUTY · PAPER TRADING" : s.trial ? "ON TRIAL · SMALL PAPER STAKE" : s.complete === false ? "BENCHED · INCOMPLETE RULES" : "BENCHED", 24, 116);
     g.fillStyle = "#6f93a8"; g.fillText("TRADES " + s.symbols.join(" "), 24, 140);
     let y = 172; g.font = MONO(17);
     const row = (k, v) => { g.fillStyle = ORANGE; g.fillText(k, 24, y); g.fillStyle = "#dff8ff"; const ls = wrap(g, v, W - 150).slice(0, 2); ls.forEach((l, i) => g.fillText(l, 110, y + i * 20)); y += 24 + (ls.length - 1) * 20; };
@@ -803,7 +803,7 @@ function buildStation(a, x) {
     const t = panelTexture(512, 150, (g, W, H) => { brackets(g, W, H, "#2f7d96"); g.font = FONT(38, 700); g.textAlign = "center"; g.fillStyle = "#2f7d96"; g.fillText("DESK OPEN", W / 2, 66); g.font = MONO(24); g.fillText("PASS A BACKTEST TO JOIN", W / 2, 110); });
     const s = sprite(t, 2.2, 0.65); s.position.set(0, 1.7, 0); st.add(s); st.userData = {empty:true, label:s, pad2}; return st;
   }
-  const r = makeRobot(BOT_OR, false); r.bot.position.set(0.35, 0, -0.72); st.add(r.bot); badgeFor(a.p.prop, r.torso);
+  const r = makeRobot(a.spec.trial ? GOLD : BOT_OR, false); r.bot.position.set(0.35, 0, -0.72); st.add(r.bot); badgeFor(a.p.prop, r.torso);
   const streamPos = new Float32Array(40 * 3);
   for (let k = 0; k < 40; k++) { streamPos[k * 3] = -0.8 + Math.random() * 0.3; streamPos[k * 3 + 1] = 0.9 + Math.random() * 6; streamPos[k * 3 + 2] = -0.1 + Math.random() * 0.3; }
   const stream = add(new THREE.Points(new THREE.BufferGeometry().setAttribute("position", new THREE.BufferAttribute(streamPos, 3)), new THREE.PointsMaterial({color:neon, size:0.05, transparent:true, opacity:0.8, blending:THREE.AdditiveBlending, depthWrite:false})), st);
@@ -820,6 +820,11 @@ function buildStation(a, x) {
     m.userData = {kind:"ticker", symbol:sym, agent:a, base:m.position.y, tex}; st.add(m); clickables.push(m); panels.push(m);
     st.add(line([[0.35, 1.9, -0.72], [m.position.x, m.position.y - 0.36, m.position.z]], neon, 0.25));
   });
+  if (a.spec.trial) {
+    const pt = panelTexture(512, 96, (g, W, H) => { g.fillStyle = "rgba(40,30,0,.85)"; g.fillRect(0, 0, W, H); for (let x = -H; x < W; x += 36) { g.fillStyle = "rgba(255,210,63,.35)"; g.beginPath(); g.moveTo(x, H); g.lineTo(x + 18, H); g.lineTo(x + 18 + H, 0); g.lineTo(x + H, 0); g.fill(); }
+      g.fillStyle = "#0a0700"; g.fillRect(70, 18, W - 140, H - 36); g.textAlign = "center"; g.font = FONT(34, 700); g.fillStyle = GOLD; g.fillText("ON TRIAL", W / 2, 60); });
+    const ps = sprite(pt, 1.7, 0.32); ps.position.set(0.35, 0.95, 0.55); st.add(ps);
+  }
   const tagTex = panelTexture(512, 100, tagDraw(a)), tag = sprite(tagTex, 2.3, 0.45); tag.position.set(0.35, 0.28, 0.75); st.add(tag);
   const bub = sprite(panelTexture(560, 130, bubbleDraw(a.words, neon)), 3.0, 0.7); bub.position.set(0.35, 3.3, -0.9); st.add(bub);
   st.userData = {a, ...r, stream, ripple, panels, glow, mood:a.mood, neon, tagTex};
@@ -898,10 +903,11 @@ function syncStations() {
   for (const grp of [stations, wanderers]) { scene.remove(grp); grp.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); } }); }
   clickables.length = 0; Object.values(SCREENS).forEach(s => clickables.push(s)); clickables.push(...FIXED_CLICKS); if (drone) clickables.push(drone.hit);
   stations = new THREE.Group(); add(stations); wanderers = new THREE.Group(); add(wanderers);
-  const crew = state.crew.map(a => ({...a, neon:CYAN}));
-  const n = crew.length + 1, gap = 4.4; span = n * gap;
-  crew.forEach((a, i) => stations.add(buildStation(a, (i - (n - 1) / 2) * gap)));
-  stations.add(buildStation(null, (n - 1 - (n - 1) / 2) * gap));
+  const crew = state.crew.map(a => ({...a, neon:a.spec.trial ? GOLD : CYAN}));
+  const n = crew.length + 1, step = n > 1 ? Math.min(32, 150 / (n - 1)) : 0; span = 8;
+  const seat = (st, i) => { const th = (180 + (i - (n - 1) / 2) * step) * DEG; st.position.set(AC.x + 4.6 * Math.sin(th), 0, AC.z + 4.6 * Math.cos(th)); st.rotation.y = th + Math.PI; return st; };
+  crew.forEach((a, i) => stations.add(seat(buildStation(a, 0), i)));
+  stations.add(seat(buildStation(null, 0), n - 1));
   state.bench.forEach((b, i) => wanderers.add(buildWanderer(b, i)));
   Object.values(SCREENS).forEach(s => redraw(s.userData.tex));
   updateMarketMove();
@@ -1208,7 +1214,7 @@ function openDetail(kind, key) {
     document.getElementById("dChart").hidden = true;
     const names = {}; state.crew.forEach(a => names[a.spec.name] = a.p.name); state.bench.forEach(b => names[b.spec.name] = b.p.name);
     body.innerHTML = (state.src.strategies || []).map(s0 => { const s = strategyCard(s0), rs = (state.src.results || []).filter(r => r.strategy === s.name);
-      return `<div class="dcard"><h3>${esc(names[s.name] || "")} · ${esc(s.name)}<span class="pill ${s.approved ? "up" : "muted"}">${s.approved ? "ON DUTY" : s.complete === false ? "BENCHED · INCOMPLETE" : "BENCHED"}</span></h3>
+      return `<div class="dcard"><h3>${esc(names[s.name] || "")} · ${esc(s.name)}<span class="pill ${s.approved ? "up" : "muted"}">${s.approved ? "ON DUTY" : s.trial ? "ON TRIAL" : s.complete === false ? "BENCHED · INCOMPLETE" : "BENCHED"}</span></h3>
         <div class="k">TRADES ${esc(s.symbols.join(" "))}</div>${s.description ? `<p style="margin:6px 0 0;font-size:15px">${esc(s.description)}</p>` : ""}
         <ul>${s.entry.length ? `<li><span class="or">ENTRY</span> ${esc(s.entry.join(" AND "))}</li>` : ""}${s.exit.length ? `<li><span class="or">EXIT</span> ${esc(s.exit.join(" OR "))}</li>` : ""}
         <li><span class="or">RISK</span> ${esc(riskText(s))}</li>
@@ -1285,7 +1291,7 @@ function renderPanels(src) {
   document.getElementById("sheets").innerHTML = crew.map(a => `
     <section class="sheet">
       <h2>${esc(a.p.name)} ${esc(a.p.title.toUpperCase())}</h2>
-      <div class="cls">CLASS: ${esc(a.spec.name)} · LV ${a.level} · ${MOOD_TEXT[a.mood]}</div>
+      <div class="cls">CLASS: ${esc(a.spec.name)}${a.spec.trial ? " · ON TRIAL" : ""} · LV ${a.level} · ${MOOD_TEXT[a.mood]}</div>
       <div class="muted">HP (room before kill switch)</div><div class="bar"><i style="width:${(a.hp * 100).toFixed(0)}%;background:${a.hp > .5 ? "var(--up)" : a.hp > .2 ? "var(--gold)" : "var(--down)"}"></i></div>
       <div class="kv">
         <span>P&amp;L</span><span class="${a.pnl > 0 ? "up" : a.pnl < 0 ? "down" : ""}">${money(a.pnl)}${a.ret != null ? " (" + pct(a.ret) + ")" : ""}</span>
@@ -1371,10 +1377,10 @@ async function loadLive(now) {
   const ls = await files.list({path: root + "/strategies", recursive:true});
   for (const e of ls.entries.filter(e => !e.isDirectory && e.path.endsWith(".json") && !e.path.endsWith(".extraction.json"))) {
     try { const s = JSON.parse((await readText(e.path)).text); if (!s || !s.name) continue;
-      const isApproved = /\/approved\//.test("/" + e.path);
-      if (isApproved) approved.push({name:s.name, symbols:s.symbols || []});
+      const isApproved = /\/approved\//.test("/" + e.path), isTrial = !isApproved && /\/trial\//.test("/" + e.path);
+      if (isApproved || isTrial) approved.push({name:s.name, symbols:s.symbols || [], trial:isTrial});
       const i = strategies.findIndex(x => x.name === s.name);
-      if (i < 0 || isApproved) { const rec = {name:s.name, approved:isApproved, symbols:s.symbols || [], description:s.description || "", complete:s.complete, missing:s.missing || [], rules:specRules(s)}; if (i >= 0) strategies[i] = rec; else strategies.push(rec); }
+      if (i < 0 || isApproved) { const rec = {name:s.name, approved:isApproved, trial:isTrial, symbols:s.symbols || [], description:s.description || "", complete:s.complete, missing:s.missing || [], rules:specRules(s)}; if (i >= 0) strategies[i] = rec; else strategies.push(rec); }
     } catch (err) { if (err && err.code === "not_granted") throw err; }
   }
   strategies.forEach(s => { if (approved.some(a => a.name === s.name)) s.approved = true; });
