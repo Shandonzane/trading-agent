@@ -15,6 +15,7 @@ from .data import get_bars
 from .strategy import StrategySpec, evaluate, load_spec
 
 APPROVED = ROOT / "strategies" / "approved"
+TRIAL = ROOT / "strategies" / "trial"  # benched strategies Shandon asked to paper-trade small; names start "Trial: "
 
 
 class RiskBlock(Exception):
@@ -54,6 +55,14 @@ class RiskManager:
 
 def approved_specs() -> list[StrategySpec]:
     return [load_spec(p) for p in sorted(APPROVED.glob("*.json"))] if APPROVED.exists() else []
+
+
+def trial_specs() -> list[StrategySpec]:
+    return [load_spec(p) for p in sorted(TRIAL.glob("*.json"))] if TRIAL.exists() else []
+
+
+def is_trial(spec) -> bool:
+    return spec.name.startswith("Trial: ")
 
 
 def fresh_bars(symbol, start, end):
@@ -97,7 +106,8 @@ def run_once(broker=None, specs=None, bars_fn=fresh_bars, today: date | None = N
         if cfg.get("account_size") and isinstance(broker, AlpacaPaperBroker):
             broker = SizedBroker(broker, cfg["starting_cash"] - cfg["account_size"])
     risk = RiskManager(cfg["risk"], con)
-    specs = approved_specs() if specs is None else specs
+    if specs is None:
+        specs = approved_specs() + (trial_specs() if cfg.get("trial", {}).get("enabled") else [])
     today = today or date.today()
     log = []
 
@@ -214,15 +224,22 @@ def run_once(broker=None, specs=None, bars_fn=fresh_bars, today: date | None = N
                 acct = broker.account()
                 pos_val = sum(abs(q) * float(bars[s]["close"].iloc[-1]) if s in bars else 0
                               for s, q in broker.positions().items())
-                qty = int(min(spec.position_size_pct, cfg["risk"]["max_position_pct"]) * acct.equity // price)
+                if is_trial(spec):  # small, fractional, fixed size
+                    qty = round(cfg["trial"]["position_pct"] * acct.equity / price, 4)
+                else:
+                    qty = int(min(spec.position_size_pct, cfg["risk"]["max_position_pct"]) * acct.equity // price)
                 try:
-                    if qty < 1:
+                    if qty <= 0 or (qty < 1 and not is_trial(spec)):
                         raise RiskBlock("position size rounds to 0 shares")
                     risk.check_buy(sym, qty, price, acct, pos_val)
                 except RiskBlock as e:
                     note(spec.name, sym, "blocked", str(e), qty=qty, price=price)
                     continue
-                oid, status = broker.submit(sym, qty, "buy", price, tag=spec.name)
+                try:
+                    oid, status = broker.submit(sym, qty, "buy", price, tag=spec.name)
+                except Exception as e:  # one rejected order must not stop the other strategies
+                    note(spec.name, sym, "error", f"buy rejected: {type(e).__name__}: {e}", qty=qty, price=price)
+                    continue
                 journal.order(con, spec.name, sym, "buy", qty, price, broker.name, status, oid)
                 journal.set_lot(con, spec.name, sym, qty, price, str(last.date()))
                 note(spec.name, sym, "buy", "entry rule fired", qty=qty, price=price)

@@ -1,0 +1,39 @@
+{
+  "name": "Trial: 20-day breakout NVDA",
+  "description": "Paper TRIAL (Shandon, 2026-10-07): benched strategy trading small to see live results. Not approved: 30%/yr, Sharpe 1.01, but a -37% out-of-sample drop and it lagged holding NVDA.",
+  "symbols": [
+    "NVDA"
+  ],
+  "entry": {
+    "mode": "all",
+    "conditions": [
+      {
+        "left": {
+          "ind": "close"
+        },
+        "op": ">",
+        "right": {
+          "ind": "highest",
+          "period": 20
+        }
+      }
+    ]
+  },
+  "exit": {
+    "mode": "any",
+    "conditions": [
+      {
+        "left": {
+          "ind": "close"
+        },
+        "op": "<",
+        "right": {
+          "ind": "lowest",
+          "period": 10
+        }
+      }
+    ]
+  },
+  "stop_loss_pct": 0.12,
+  "position_size_pct": 0.1
+}

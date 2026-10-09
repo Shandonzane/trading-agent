@@ -4,7 +4,8 @@ Spec: research/worst-case-hedge.md section 6 (Shandon picked puts, then "assign 
 hedge a crash", 2026-10-06).
 - Every ~6 months buy SPYM puts about 6 months out, strike about 20% below SPYM. One contract
   per ~$9,000 of stock (stock_share of the account), so 2 on a $20k account.
-- Limit orders at the bid/ask midpoint, never market orders: these spreads are wide.
+- Limit orders, never market orders: these spreads are wide. A buy starts at the bid/ask midpoint
+  and, each day it is still unfilled, moves halfway closer to the ask (the ask by day 3).
 - Hold to expiry. A put that's in the money within `sell_before_days` of expiry is sold, so it is
   never exercised (exercise would open a short). Out-of-the-money puts just expire.
 - The rest of the slice's budget sits in BIL (T-bills). The budget starts at capital_pct of the
@@ -109,7 +110,12 @@ def run(broker, con, cfg: dict, risk, note, today: date | None = None, chain_fn=
             same = [s for s in syms if parse_occ(s)[0] == exp]
             pick = min(same, key=lambda s: abs(parse_occ(s)[1] - spot * (1 - h.get("otm", 0.20))))
             bid, ask = quotes_fn([pick]).get(pick, (0, 0))
-            mid = round((bid + ask) / 2, 2)
+            # a midpoint limit often expires unfilled: each day the buy is still missing, pay
+            # half of the way from the midpoint to the ask more, capped at the ask
+            tries = state.get("tries", 0) + 1 if state.get("last_try", str(today)) < str(today) else 0
+            mid = round(min(ask, (bid + ask) / 2 + min(tries, 2) * (ask - bid) / 4), 2)
+            if tries:  # the unfilled order never spent its premium
+                budget += state.pop("last_cost", 0)
             cost = n * 100 * mid
             if not bid or not ask:
                 why = "no two-sided quote"
@@ -126,9 +132,12 @@ def run(broker, con, cfg: dict, risk, note, today: date | None = None, chain_fn=
             journal.order(con, NAME, pick, "buy", n, mid, broker.name, status, oid)
             journal.set_lot(con, NAME, pick, n, mid, str(today))
             budget -= cost
+            state.update(tries=tries, last_try=str(today), last_cost=round(cost, 2))
             note(NAME, pick, "buy", f"{n} puts, strike {parse_occ(pick)[1]:g} vs SPYM {spot:.2f}, expiring {exp}",
                  qty=n, price=mid, cost=round(cost, 2))
     else:
+        for k in ("tries", "last_try", "last_cost"):
+            state.pop(k, None)
         note(NAME, ", ".join(live), "hold", "holding puts to expiry")
 
     if budget > 1.5 * start:  # a crash paid off: release the excess to the stock slices

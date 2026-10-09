@@ -1,3 +1,4 @@
+import json
 from datetime import date
 from types import SimpleNamespace
 
@@ -89,6 +90,14 @@ def test_hedge_buys_puts_and_parks_rest_in_bills(tmp_path, monkeypatch):
     assert b.orders[0] == ("SPYM270319P00075000", "buy", 2, 0.6)   # 2 x ~$9.2k covers $14k of stock
     assert b.orders[1] == ("BIL", "buy", 9)                         # ($1,000 - $121) in T-bills
     b.orders.clear()
+    # the midpoint order expired unfilled: reconcile dropped the lot, so the next day pays more
+    journal.set_lot(con, hedge_agent.NAME, "SPYM270319P00075000", 0)
+    hedge_agent.run(b, con, CFG, RISK, lambda *a, **k: None, today=date(2026, 10, 7),
+                    chain_fn=lambda u, lo, hi: chain, quotes_fn=lambda s: {x: (0.43, 0.78) for x in s},
+                    price_fn=lambda s: {"SPYM": 92.0, "BIL": 91.5}[s], state_path=tmp_path / "h.json")
+    assert b.orders[0] == ("SPYM270319P00075000", "buy", 2, 0.69)  # halfway from 0.605 to 0.78
+    assert json.loads((tmp_path / "h.json").read_text())["budget"] == round(1000 - 138, 2)  # yesterday's $121 refunded
+    b.orders.clear()
     # near expiry and in the money after a crash: sold, never exercised; then rolls into a new put
     hedge_agent.run(b, con, CFG, RISK, lambda *a, **k: None, today=date(2027, 3, 16),
                     chain_fn=lambda u, lo, hi: ["SPYM270917P00050000"], quotes_fn=lambda s: {x: (12.0, 12.4) for x in s},
@@ -99,3 +108,32 @@ def test_hedge_buys_puts_and_parks_rest_in_bills(tmp_path, monkeypatch):
 
 def test_parse_occ():
     assert hedge_agent.parse_occ("SPYM270319P00075000") == (date(2027, 3, 19), 75.0)
+
+
+def test_buy_lifts_other_slices_stops_when_alpaca_flags_a_wash_trade():
+    from tradebot.broker import AlpacaPaperBroker
+
+    class Client:
+        def __init__(self):
+            self.open = [SimpleNamespace(id="s1", client_order_id="20-day-breakout-stop-abc", qty=2, stop_price=665.46)]
+            self.sent = []
+
+        def get_orders(self, req):
+            return list(self.open)
+
+        def cancel_order_by_id(self, oid):
+            self.open = [o for o in self.open if o.id != oid]
+
+        def submit_order(self, req):
+            if self.open and req.side.value == "buy":
+                raise Exception('{"code":40310000,"message":"potential wash trade detected. use complex orders"}')
+            if self.sent and req.side.value == "sell":
+                raise Exception('{"code":40310000,"message":"potential wash trade detected"}')
+            self.sent.append(req)
+            return SimpleNamespace(id="o1", status="accepted")
+
+    b = AlpacaPaperBroker.__new__(AlpacaPaperBroker)
+    b.client = Client()
+    assert b.submit("QQQ", 0.5, "buy", 750, tag="Trial: golden cross") == ("o1", "accepted")
+    assert b.client.open == []                                         # the breakout stop was lifted
+    assert b.ensure_stop("QQQ", 2, 665.46, "20-day breakout").startswith("deferred")  # back once the buy fills
