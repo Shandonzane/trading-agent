@@ -66,12 +66,13 @@ def snapshot(root: Path = ROOT) -> dict:
             continue
         if not isinstance(s, dict) or not s.get("name"):
             continue
-        is_approved = "approved" in f.relative_to(root / "strategies").parts
-        if is_approved:
-            approved.append({"name": s["name"], "symbols": s.get("symbols", [])})
+        parts = f.relative_to(root / "strategies").parts
+        is_approved, is_trial = "approved" in parts, "trial" in parts
+        if is_approved or is_trial:  # trial strategies paper trade on probation, so they get a (gold) desk too
+            approved.append({"name": s["name"], "symbols": s.get("symbols", []), "trial": is_trial and not is_approved})
         if s["name"] not in strategies or is_approved:
             strategies[s["name"]] = {"name": s["name"], "approved": is_approved, "symbols": s.get("symbols", []),
-                                     "description": s.get("description", ""), "complete": s.get("complete"),
+                                     "description": s.get("description", ""), "complete": s.get("complete"), "trial": is_trial,
                                      "missing": s.get("missing", []), "rules": _rules(s)}
     for a in approved:
         strategies[a["name"]]["approved"] = True
