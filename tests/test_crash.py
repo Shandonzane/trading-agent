@@ -97,6 +97,13 @@ def test_hedge_buys_puts_and_parks_rest_in_bills(tmp_path, monkeypatch):
                     price_fn=lambda s: {"SPYM": 92.0, "BIL": 91.5}[s], state_path=tmp_path / "h.json")
     assert b.orders[0] == ("SPYM270319P00075000", "buy", 2, 0.69)  # halfway from 0.605 to 0.78
     assert json.loads((tmp_path / "h.json").read_text())["budget"] == round(1000 - 138, 2)  # yesterday's $121 refunded
+    for day, limit in ((8, 0.78), (9, 0.82)):  # at the ask on day 3, then 5% above it
+        journal.set_lot(con, hedge_agent.NAME, "SPYM270319P00075000", 0)
+        b.orders.clear()
+        hedge_agent.run(b, con, CFG, RISK, lambda *a, **k: None, today=date(2026, 10, day),
+                        chain_fn=lambda u, lo, hi: chain, quotes_fn=lambda s: {x: (0.43, 0.78) for x in s},
+                        price_fn=lambda s: {"SPYM": 92.0, "BIL": 91.5}[s], state_path=tmp_path / "h.json")
+        assert b.orders[0][3] == limit
     b.orders.clear()
     # near expiry and in the money after a crash: sold, never exercised; then rolls into a new put
     hedge_agent.run(b, con, CFG, RISK, lambda *a, **k: None, today=date(2027, 3, 16),
