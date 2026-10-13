@@ -144,3 +144,27 @@ def test_buy_lifts_other_slices_stops_when_alpaca_flags_a_wash_trade():
     assert b.submit("QQQ", 0.5, "buy", 750, tag="Trial: golden cross") == ("o1", "accepted")
     assert b.client.open == []                                         # the breakout stop was lifted
     assert b.ensure_stop("QQQ", 2, 665.46, "20-day breakout").startswith("deferred")  # back once the buy fills
+
+
+def test_stock_far_above_its_200_day_is_not_bought_straight_back(tmp_path, monkeypatch):
+    setup(tmp_path, monkeypatch)
+    idx = pd.bdate_range("2025-06-02", periods=300)
+    st = {"peaks": {}, "out": {"Big bets|AMD": {"since": str(idx[-3].date()), "peak": 650.0}}, "seen": []}
+    stops.save(st)
+    rebound = pd.Series([300 + i for i in range(297)] + [571, 590, 605], index=idx)  # stopped at 571, way above its 200-day
+    assert stops.waiting("Big bets", "AMD", rebound)
+    new_high = pd.Series([300 + i for i in range(299)] + [651], index=idx)           # back at the old peak
+    assert not stops.waiting("Big bets", "AMD", new_high)
+
+
+def test_put_limit_never_above_one_and_a_half_times_the_lowest_midpoint(tmp_path, monkeypatch):
+    con = setup(tmp_path, monkeypatch)
+    b = B()
+    chain = ["SPYM270319P00075000"]
+    for day, quote in ((6, (0.57, 0.73)), (7, (0.57, 0.73)), (8, (0.57, 0.73)), (9, (0.23, 0.97))):
+        journal.set_lot(con, hedge_agent.NAME, chain[0], 0)
+        b.orders.clear()
+        hedge_agent.run(b, con, CFG, RISK, lambda *a, **k: None, today=date(2026, 10, day),
+                        chain_fn=lambda u, lo, hi: chain, quotes_fn=lambda s, q=quote: {x: q for x in s},
+                        price_fn=lambda s: {"SPYM": 92.0, "BIL": 91.5}[s], state_path=tmp_path / "h.json")
+    assert b.orders[0][3] == 0.9   # 1.5 x the 0.60 midpoint, not 5% past the blown-out 0.97 ask

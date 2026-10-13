@@ -4,7 +4,9 @@ Shandon asked for a 12% stop on any stock (2026-10-06). Backtests on SPY, QQQ an
 (research/crash-plan.md) showed a stop measured from the entry price almost never fires on a
 long hold, so the stop trails the highest close since entry. A stop-out without a rule to
 get back in just turns a dip into cash forever, so a stopped-out holding waits until:
-  - its close is back above its 200-day average (the crash is over), or
+  - it has closed below its 200-day average since the stop and is now back above it (the crash
+    is over; a stock far above its 200-day would otherwise be bought straight back), or
+  - it closes at or above the peak the stop trailed (the uptrend resumed), or
   - it is 30% or more below the peak the stop trailed (buy the crash),
 and then the slice that owned it buys it back at its normal size.
 
@@ -77,11 +79,19 @@ def waiting(strategy: str, symbol: str, closes, note=None) -> bool:
     sma = float(closes.rolling(200).mean().iloc[-1]) if len(closes) >= 200 else None
     peak = out.get("peak")
     why = None
-    if sma and close > sma:
+    since = closes[closes.index.date > date.fromisoformat(out["since"])] if out.get("since") else closes.iloc[-1:]
+    smas = closes.rolling(200).mean().reindex(since.index)
+    dipped = bool((since < smas).any())  # a stock far above its 200-day would otherwise be bought straight back
+    if sma and close > sma and (dipped or out.get("dipped")):
         why = f"back above its 200-day average ({close:.2f} > {sma:.2f})"
+    elif peak and close >= peak:
+        why = f"back at its {peak:.2f} peak: the uptrend resumed"
     elif peak and close <= peak * 0.70:
         why = f"30%+ below its {peak:.2f} peak: buying the crash"
     if not why:
+        if dipped and not out.get("dipped"):
+            out["dipped"] = True
+            save(st)
         return True
     del st["out"][k]
     save(st)
